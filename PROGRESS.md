@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 1 완료 — Phase 2(렌더링 & 입력) 시작 대기** |
-| 마지막 커밋 | `feat: add input model — pointer samples to angular velocity` (develop) |
-| CI 상태 | develop push 후 확인 필요 (ubuntu에서 골든 스냅샷 결정론 첫 검증) · main 보호 활성 |
+| 현재 단계 | **Phase 2 완료 — Phase 3(햅틱) 시작 대기** |
+| 마지막 커밋 | `feat: implement neon spinner renderer and pointer input` (develop) |
+| CI 상태 | develop green (ab801f6에서 골든 스냅샷 ubuntu 결정론 검증 완료) · 이번 push 후 재확인 |
 | 배포 URL | (없음) |
 | 블로커 | 없음 |
 
@@ -41,11 +41,11 @@
 - [x] `core/input-model.ts` 포인터 샘플 → 각속도 변환 + 테스트
 
 ### Phase 2 — 렌더링 & 입력
-- [ ] `render/canvas-renderer.ts` (DPR 대응, 3날개 스피너)
-- [ ] Pointer Events 플릭 제스처
-- [ ] 브레이크 (포인터 다운 유지)
-- [ ] 더블탭 즉시 정지
-- [ ] 세로 고정 / 오버스크롤·줌 차단 / Wake Lock
+- [x] `render/canvas-renderer.ts` (DPR 대응, 3날개 스피너) — 네온 아웃라인(B 시안), 오프스크린 캐시 + rotate/drawImage
+- [x] Pointer Events 플릭 제스처 (`platform/pointer-input.ts`)
+- [x] 브레이크 (포인터 다운 유지)
+- [x] 더블탭 즉시 정지
+- [x] 세로 고정 / 오버스크롤·줌 차단 / Wake Lock
 
 ### Phase 3 — 햅틱 (핵심)
 - [ ] `core/haptic-scheduler.ts` 디텐트 펄스 시점 계산
@@ -85,6 +85,23 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #4 (Phase 2 렌더링 & 입력)
+**완료**
+- 스피너 디자인 확정: B안 네온 아웃라인 (파랑 #39d5ff 몸체 + 라임 #9ef01a 포인트, 다크 #0e1116 배경). 기준 시안 `docs/design/spinner-reference.svg`
+- `render/canvas-renderer.ts`: DPR 대응, 글로우(shadowBlur)는 오프스크린 캔버스에 1회 렌더 후 매 프레임 rotate+drawImage만 수행 (리사이즈/DPR 변경 시 재생성)
+- `platform/pointer-input.ts`: 플릭(샘플 수집 → core input-model로 Δω), 브레이크(홀드 판정), 더블탭 정지. 판정 임계값은 파일 내 명명 상수
+- `main.ts`: rAF 게임 루프 + core advance() 연결, visibility hidden 시 루프 정지
+- `platform/wake-lock.ts`: 화면 꺼짐 방지, visibility 복귀 시 재획득, 미지원 무시
+- index.html/CSS: 전체화면 캔버스, touch-action/overscroll/줌 차단
+- E2E 스모크 3종 (앱 셸 로드/정지 상태 렌더/플릭 회전 + 더블탭 정지) — 로컬 chromium 통과
+- verify green (79 단위 테스트) + build 성공 (번들 3.26KB gzip / 예산 60KB)
+
+**다음 할 일**
+- Phase 3: 햅틱 — `core/haptic-scheduler.ts`, `platform/vibration-driver.ts`, 웜업 펄스, capability 감지, 디버그 오버레이
+
+**막힌 지점 / 결정 대기**
+- 없음
 
 ### 2026-08-04 — 세션 #3 (Phase 1 물리 코어, physics-engineer 수행)
 **완료**
