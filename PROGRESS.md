@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 3 완료 — Phase 4(기록 시스템) 진행 중** |
-| 마지막 커밋 | `feat: implement detent haptics with pulse scheduler and debug overlay` (develop) |
-| CI 상태 | develop green (d156b0c까지) · Phase 3 push 후 재확인 |
+| 현재 단계 | **Phase 4 완료 — Phase 5(PWA & 배포) 진행 중** |
+| 마지막 커밋 | `feat: implement record system with IndexedDB storage and stats panel` (develop) |
+| CI 상태 | develop green (754ee99까지) · Phase 4 push 후 재확인 |
 | 배포 URL | (없음) |
 | 블로커 | 없음 |
 
@@ -57,11 +57,11 @@
 - [x] 목킹 기반 타임스탬프 시퀀스 테스트 (단위 44개 + e2e 5개, 실브라우저 vibrate 간격 검증 포함)
 
 ### Phase 4 — 기록 시스템
-- [ ] `platform/storage/adapter.ts` 인터페이스
-- [ ] `platform/storage/indexeddb.ts` 구현
-- [ ] `core/stats.ts` 집계 로직 + 테스트
-- [ ] 통계 UI (최고 RPM / 총 회전수 / 최장 시간 / 세션 수)
-- [ ] 백업 코드 내보내기·불러오기
+- [x] `platform/storage/adapter.ts` 인터페이스 (CLAUDE.md 6장 그대로, 백업 코드 인코딩/검증 단일화)
+- [x] `platform/storage/indexeddb.ts` 구현 (records+aggregate 단일 트랜잭션, 실패 시 인메모리 폴백)
+- [x] `core/stats.ts` 집계 로직 + 테스트 (OMEGA_STOP 문턱 공유, 250ms 미만 미기록, 1초 공백 세션 분리)
+- [x] 통계 UI (최고 RPM / 총 회전수 / 최장 시간 / 세션 수)
+- [x] 백업 코드 내보내기·불러오기 (import는 교체 방식 — 사유는 세션 #6 로그)
 
 ### Phase 5 — PWA & 배포
 - [ ] `manifest.webmanifest` 완비 (maskable 아이콘 포함)
@@ -85,6 +85,23 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #6 (Phase 4 기록 시스템)
+**완료**
+- `core/stats.ts`: trackSpin 순수 함수 — 세션 판정 문턱을 haptic-scheduler와 같은 OMEGA_STOP으로 공유 (마무리 펄스와 기록 종료가 같은 프레임). 250ms 미만 튕김 미기록, 1초 초과 프레임 공백 시 세션 분리(탭 전환이 duration을 부풀리지 않음)
+- storage: DB v1 (records + aggregate), putRecord는 레코드+집계 단일 트랜잭션 (중간 크래시에도 불일치 없음). 열기 실패/차단/3초 무응답 → 인메모리 폴백, `data-storage` 속성으로 진단 가능
+- import는 병합이 아닌 **교체**: 백업 코드가 레코드 500개 제한이라 병합 시 집계 복원 불가 + 같은 코드 재입력 시 이중 집계 문제. 교체는 대칭적이고 설명 가능
+- IndexedDB 테스트는 fake 폴리필 대신 실브라우저 e2e (영속성·트랜잭션 커밋을 진짜로 검증). devDependency 추가 0
+- 통계 패널 UI: 4개 지표 + 백업 내보내기/복사/불러오기. Phase 5 History API 연결용 open/close 훅 분리
+- 단위 189개(+66) / e2e 14개(+6: 영속, 백업 라운드트립, 오류 코드 무손상, 폴백 등) green. 번들 11KB gzip
+- playwright.config.ts 로컬 워커 50%→4 (CPU 포화 시 mouse.move 간격이 벌어져 기존 플릭 테스트가 플레이키해짐. CI는 workers:1이라 무관)
+
+**다음 할 일**
+- Phase 5: manifest/SW 오프라인/History API(통계 패널 백버튼)/시각 회귀/Lighthouse/Vercel 배포
+- Vercel 연결은 사용자 인증 필요 시점에 요청 예정
+
+**막힌 지점 / 결정 대기**
+- 기록 초기화(clear) UI 버튼 미구현 — 파괴적 조작이라 사용자 결정 대기
 
 ### 2026-08-04 — 세션 #5 (Phase 3 햅틱, haptics-specialist 수행)
 **완료**

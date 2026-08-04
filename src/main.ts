@@ -5,12 +5,24 @@
 
 import { createHapticState, scheduleHaptics, type HapticState } from './core/haptic-scheduler';
 import { advance, applyImpulse, createSpinState, halt, type SpinState } from './core/physics';
+import {
+  createStatsState,
+  EMPTY_SPIN_AGGREGATE,
+  mergeSpin,
+  trackSpin,
+  type CompletedSpin,
+  type SpinAggregate,
+  type StatsState,
+} from './core/stats';
 import { detectCapability, mountUnsupportedNotice } from './platform/capability';
 import { attachPointerInput } from './platform/pointer-input';
+import { newSpinRecord } from './platform/storage/adapter';
+import { aggregateStats, createStorage } from './platform/storage/indexeddb';
 import { createHapticDriver } from './platform/vibration-driver';
 import { createWakeLock } from './platform/wake-lock';
 import { createCanvasRenderer } from './render/canvas-renderer';
 import { createDebugOverlay, isDebugEnabled, type DebugOverlay } from './render/debug-overlay';
+import { mountStatsPanel } from './ui';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage');
 if (canvas === null) throw new Error('#stage 캔버스를 찾지 못했다.');
@@ -31,6 +43,47 @@ const overlay: DebugOverlay | null = isDebugEnabled(window.location.search)
 
 let state: SpinState = createSpinState();
 let haptics: HapticState = createHapticState();
+let stats: StatsState = createStatsState();
+
+// ── 기록 ───────────────────────────────────────────────────────
+// 저장은 전부 fire-and-forget 이다. IndexedDB 가 느리든 막혀 있든 게임 루프는 기다리지 않고,
+// 실패해도 삼킨다 — 기록을 못 남기는 것이 회전이 끊기는 것보다 낫다.
+// 화면에 보이는 숫자는 로컬에서 즉시 갱신한다. 저장소도 같은 mergeSpin 으로 집계하므로
+// 두 값이 벌어지지 않는다 (indexeddb.ts 의 putRecord 참조).
+
+const storage = createStorage();
+let aggregate: SpinAggregate = EMPTY_SPIN_AGGREGATE;
+
+const statsPanel = mountStatsPanel(document.body, {
+  onExport: () => storage.export(),
+  async onImport(code: string): Promise<void> {
+    await storage.import(code);
+    aggregate = aggregateStats(await storage.getAggregate());
+    statsPanel.setAggregate(aggregate);
+  },
+});
+
+// 어느 경로로 저장되고 있는지 DOM 에 남긴다. 실기기에서 "기록이 안 남는다"를 진단할 때,
+// 폴백으로 떨어졌는지(저장소 차단) 저장 자체가 실패했는지를 가르는 유일한 단서다.
+void storage.usingFallback.then((fallback) => {
+  document.documentElement.dataset['storage'] = fallback ? 'memory' : 'indexeddb';
+});
+
+void storage
+  .getAggregate()
+  .then((stored) => {
+    aggregate = aggregateStats(stored);
+    statsPanel.setAggregate(aggregate);
+  })
+  .catch(() => {
+    // 읽지 못하면 0 에서 시작한다. 이번 세션의 기록은 계속 쌓이고 저장도 계속 시도한다.
+  });
+
+function recordSpin(spin: CompletedSpin): void {
+  aggregate = mergeSpin(aggregate, spin);
+  statsPanel.setAggregate(aggregate);
+  void storage.putRecord(newSpinRecord(spin)).catch(() => {});
+}
 
 const input = attachPointerInput(canvas, () => renderer.layout(), {
   onFlick(deltaOmega: number): void {
@@ -123,6 +176,17 @@ function frame(nowMs: number): void {
   });
   haptics = scheduled.state;
   for (const pulse of scheduled.pulses) driver.pulse(pulse.durationMs);
+
+  // 회전 세션 추적. 세션이 끝난 프레임에만 completed 가 나온다 (프레임당 최대 하나).
+  const tracked = trackSpin(stats, {
+    prevTheta,
+    theta: state.theta,
+    omega: state.omega,
+    isBraking,
+    nowMs,
+  });
+  stats = tracked.state;
+  if (tracked.completed !== null) recordSpin(tracked.completed);
 
   renderer.render(state.theta);
 
