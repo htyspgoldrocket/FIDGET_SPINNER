@@ -6,6 +6,8 @@
 //
 // platform 레이어이므로 crypto / Date.now / btoa 를 써도 된다 (core 순수성 규칙은 src/core/** 에만).
 
+import { FLICK_SENSITIVITY_DEFAULT } from '../../core/constants';
+import { clampFlickSensitivity } from '../../core/input-model';
 import type { CompletedSpin, SpinAggregate } from '../../core/stats';
 import { aggregateOf, EMPTY_SPIN_AGGREGATE } from '../../core/stats';
 
@@ -41,6 +43,32 @@ export interface StorageAdapter {
   import(code: string): Promise<void>;
   clear(): Promise<void>;
 }
+
+// ── 사용자 설정 ───────────────────────────────────────────────
+//
+// **StorageAdapter 와 분리한 이유**: 그 인터페이스는 CLAUDE.md 6장에 명세로 못박혀 있고, 원격
+// 백엔드를 붙일 때 그대로 재구현될 계약이다. 설정은 성격이 다르다 — 기록은 "이 사람이 남긴 것"이라
+// 언젠가 서버로 올라가지만, 민감도는 **이 기기의 손가락에 맞춘 값**이라 기기를 옮겨 다닐 이유가
+// 없다. 한 인터페이스에 섞으면 원격 구현체가 옮길 필요 없는 것까지 옮겨야 한다.
+
+/** 사용자 설정. 기록과 달리 백업 코드에 포함되지 않는다 (아래 BackupPayload 주석 참조). */
+export type Settings = {
+  /** 플릭 민감도 배율. FLICK_SENSITIVITY_MIN ~ MAX 범위 (core 가 사용 직전에 다시 클램프한다). */
+  flickSensitivity: number;
+  schemaVersion: 1;
+};
+
+/** 설정을 읽고 쓰는 최소 계약. 스토어가 하나뿐이라 목록·커서 개념이 없다. */
+export interface SettingsStore {
+  getSettings(): Promise<Settings>;
+  putSettings(s: Settings): Promise<void>;
+}
+
+/** 설정을 건드린 적 없는 사용자의 값. */
+export const DEFAULT_SETTINGS: Settings = Object.freeze({
+  flickSensitivity: FLICK_SENSITIVITY_DEFAULT,
+  schemaVersion: SCHEMA_VERSION,
+});
 
 /** 기록이 없는 상태의 집계값. */
 export const EMPTY_AGGREGATE: Aggregate = Object.freeze({
@@ -198,7 +226,32 @@ export function readAggregate(value: unknown): Aggregate | null {
   };
 }
 
+/**
+ * 저장된 설정을 읽는다. 형태가 어긋나면 null — 호출부가 DEFAULT_SETTINGS 로 떨어진다.
+ *
+ * 레코드와 달리 **값이 범위를 벗어났다고 버리지는 않는다.** 기록은 틀린 숫자면 없느니만 못하지만,
+ * 설정은 사용자가 직접 맞춰둔 것이라 최대한 살려서 가장 가까운 유효값으로 붙여준다.
+ */
+export function readSettings(value: unknown): Settings | null {
+  if (!isRecordObject(value)) return null;
+  if (value['schemaVersion'] !== SCHEMA_VERSION) return null;
+
+  const flickSensitivity = finiteNumber(value['flickSensitivity']);
+  if (flickSensitivity === null) return null;
+
+  return {
+    flickSensitivity: clampFlickSensitivity(flickSensitivity),
+    schemaVersion: SCHEMA_VERSION,
+  };
+}
+
 // ── 백업 코드 ─────────────────────────────────────────────────
+//
+// **백업 코드에는 설정을 넣지 않는다 (기록 전용).** 백업의 용도는 "브라우저 저장소가 날아가도
+// 기록은 되살린다"이고, 실제로 가장 흔한 사용법은 **다른 기기로 옮기기**다. 민감도는 그 기기의
+// 화면 크기·손가락·터치 샘플링에 맞춰 맞춘 값이라, 함께 실려 가면 옮긴 쪽에서 조작감이 도리어
+// 어긋난다. 게다가 import 는 병합이 아니라 교체이므로(indexeddb.ts) 코드 한 장을 넣는 순간
+// 지금 기기에서 맞춰둔 민감도가 말없이 덮인다. 그래서 BackupPayload 에는 aggregate 와 records 뿐이다.
 
 function toBase64(text: string): string {
   const bytes = new TextEncoder().encode(text);

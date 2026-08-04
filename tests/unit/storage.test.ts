@@ -7,13 +7,20 @@ import { describe, expect, it } from 'vitest';
 
 import { aggregateOf, EMPTY_SPIN_AGGREGATE, type CompletedSpin } from '../../src/core/stats';
 import {
+  FLICK_SENSITIVITY_DEFAULT,
+  FLICK_SENSITIVITY_MAX,
+  FLICK_SENSITIVITY_MIN,
+} from '../../src/core/constants';
+import {
   BackupError,
   decodeBackup,
+  DEFAULT_SETTINGS,
   EMPTY_AGGREGATE,
   encodeBackup,
   newSpinRecord,
   readAggregate,
   readRecord,
+  readSettings,
   SCHEMA_VERSION,
   toAggregate,
   toCompletedSpin,
@@ -277,5 +284,101 @@ describe('StorageAdapter 계약 (인메모리 백엔드)', () => {
 
     expect(decoded.records).toEqual([]);
     expect(decoded.aggregate).toEqual(toAggregate(EMPTY_SPIN_AGGREGATE));
+  });
+});
+
+describe('설정 값 검증', () => {
+  it('정상 설정은 그대로 통과한다', () => {
+    const settings = { flickSensitivity: 0.75, schemaVersion: 1 } as const;
+    expect(readSettings(settings)).toEqual(settings);
+  });
+
+  it.each([
+    ['null', null],
+    ['배열', []],
+    ['문자열', 'nope'],
+    ['빈 객체', {}],
+    ['schemaVersion 없음', { flickSensitivity: 1 }],
+    ['schemaVersion 2', { flickSensitivity: 1, schemaVersion: 2 }],
+    ['배율이 문자열', { flickSensitivity: '1.0', schemaVersion: 1 }],
+    ['배율이 NaN', { flickSensitivity: Number.NaN, schemaVersion: 1 }],
+  ])('%s 은 읽지 않는다 (호출부가 기본값으로 떨어진다)', (_label, value) => {
+    expect(readSettings(value)).toBeNull();
+  });
+
+  it('범위를 벗어난 배율은 버리지 않고 경계로 붙여준다', () => {
+    // 레코드와 다른 정책이다. 기록은 틀린 숫자면 없느니만 못하지만, 설정은 사용자가 맞춰둔
+    // 의도가 담긴 값이라 최대한 살린다.
+    expect(readSettings({ flickSensitivity: 99, schemaVersion: 1 })?.flickSensitivity).toBe(
+      FLICK_SENSITIVITY_MAX,
+    );
+    expect(readSettings({ flickSensitivity: -5, schemaVersion: 1 })?.flickSensitivity).toBe(
+      FLICK_SENSITIVITY_MIN,
+    );
+  });
+
+  it('기본 설정은 기본 배율이고 스키마 버전이 박혀 있다', () => {
+    expect(DEFAULT_SETTINGS.flickSensitivity).toBe(FLICK_SENSITIVITY_DEFAULT);
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(readSettings(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+describe('SettingsStore 계약 (인메모리 백엔드)', () => {
+  it('아무것도 저장한 적 없으면 기본값이다', async () => {
+    const storage = createMemoryStorage();
+    expect(await storage.getSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('저장한 값이 그대로 돌아온다 (라운드트립)', async () => {
+    const storage = createMemoryStorage();
+    await storage.putSettings({ flickSensitivity: 0.45, schemaVersion: 1 });
+    expect(await storage.getSettings()).toEqual({ flickSensitivity: 0.45, schemaVersion: 1 });
+
+    await storage.putSettings({ flickSensitivity: 1.25, schemaVersion: 1 });
+    expect((await storage.getSettings()).flickSensitivity).toBe(1.25);
+  });
+
+  it('폴백 경로에서도 범위 밖 값은 읽을 때 잘린다 (IndexedDB 경로와 같은 지점)', async () => {
+    const storage = createMemoryStorage();
+    // 타입을 우회해 손상된 값을 밀어넣는다 — 예전 버전이나 다른 탭이 써넣은 상황이다.
+    await storage.putSettings({ flickSensitivity: 42, schemaVersion: 1 });
+    expect((await storage.getSettings()).flickSensitivity).toBe(FLICK_SENSITIVITY_MAX);
+
+    await storage.putSettings({ flickSensitivity: Number.NaN, schemaVersion: 1 });
+    expect(await storage.getSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('설정은 백업 코드에 실리지 않는다 (백업은 기록 전용)', async () => {
+    const storage = createMemoryStorage();
+    await storage.putSettings({ flickSensitivity: 0.3, schemaVersion: 1 });
+    await storage.putRecord(record(0));
+
+    const decoded = decodeBackup(await storage.export());
+    expect(Object.keys(decoded).sort()).toEqual(['aggregate', 'records', 'schemaVersion']);
+    expect(JSON.stringify(decoded)).not.toContain('flickSensitivity');
+  });
+
+  it('백업을 불러와도 이 기기의 민감도는 그대로다', async () => {
+    const source = createMemoryStorage();
+    await source.putRecord(record(0));
+    const code = await source.export();
+
+    const target = createMemoryStorage();
+    await target.putSettings({ flickSensitivity: 0.5, schemaVersion: 1 });
+    await target.import(code);
+
+    expect((await target.getSettings()).flickSensitivity).toBe(0.5);
+    expect(await target.listRecords(10)).toHaveLength(1);
+  });
+
+  it('clear 는 기록만 지우고 설정은 남긴다', async () => {
+    const storage = createMemoryStorage();
+    await storage.putSettings({ flickSensitivity: 1.5, schemaVersion: 1 });
+    await storage.putRecord(record(0));
+    await storage.clear();
+
+    expect(await storage.getAggregate()).toEqual(EMPTY_AGGREGATE);
+    expect((await storage.getSettings()).flickSensitivity).toBe(1.5);
   });
 });

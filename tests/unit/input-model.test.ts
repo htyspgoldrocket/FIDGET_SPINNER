@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  clampFlickSensitivity,
   flickAngularVelocity,
   flickToOmegaDelta,
   selectFlickSamples,
@@ -14,6 +15,9 @@ import {
   FLICK_MAX_SAMPLES,
   FLICK_MIN_LEVER_ARM_FRAC,
   FLICK_SAMPLE_WINDOW_MS,
+  FLICK_SENSITIVITY_DEFAULT,
+  FLICK_SENSITIVITY_MAX,
+  FLICK_SENSITIVITY_MIN,
   K_FLICK,
   OMEGA_MAX,
 } from '../../src/core/constants';
@@ -159,6 +163,103 @@ describe('경계 케이스', () => {
     const withOldNoise = [sample(-800, 900, 100), sample(900, -800, 150), ...recent];
     expect(flickAngularVelocity(withOldNoise, CENTER, RADIUS)).toBe(
       flickAngularVelocity(recent, CENTER, RADIUS),
+    );
+  });
+});
+
+describe('플릭 민감도 (사용자 설정 배율)', () => {
+  // 100px 지점에서 접선으로 500 px/s → 손가락 각속도 5 rad/s.
+  const flick = [sample(100, -5, 0), sample(100, 5, 20)];
+
+  it('상수의 범위가 뒤집혀 있지 않다', () => {
+    expect(FLICK_SENSITIVITY_MIN).toBeGreaterThan(0);
+    expect(FLICK_SENSITIVITY_MIN).toBeLessThan(FLICK_SENSITIVITY_DEFAULT);
+    expect(FLICK_SENSITIVITY_DEFAULT).toBeLessThan(FLICK_SENSITIVITY_MAX);
+  });
+
+  it('인자를 생략하면 기본 배율이다 (기존 호출부는 값이 변하지 않는다)', () => {
+    expect(flickToOmegaDelta(flick, CENTER, RADIUS)).toBe(
+      flickToOmegaDelta(flick, CENTER, RADIUS, FLICK_SENSITIVITY_DEFAULT),
+    );
+    expect(FLICK_SENSITIVITY_DEFAULT).toBe(1);
+  });
+
+  it('배율 0.5 면 Δω 가 정확히 절반이다', () => {
+    const full = flickToOmegaDelta(flick, CENTER, RADIUS, 1);
+    const half = flickToOmegaDelta(flick, CENTER, RADIUS, 0.5);
+    expect(half).toBeCloseTo(full / 2, 12);
+    expect(half).toBeCloseTo(5 * K_FLICK * 0.5, 9);
+  });
+
+  it('배율은 Δω 에 선형으로 곱해진다 (부호도 함께 따라간다)', () => {
+    const base = flickToOmegaDelta(flick, CENTER, RADIUS, 1);
+    for (const s of [0.25, 0.4, 0.75, 1.25, 1.5]) {
+      expect(flickToOmegaDelta(flick, CENTER, RADIUS, s)).toBeCloseTo(base * s, 9);
+    }
+
+    const reversed = [sample(100, 5, 0), sample(100, -5, 20)];
+    expect(flickToOmegaDelta(reversed, CENTER, RADIUS, 0.5)).toBeCloseTo(
+      -flickToOmegaDelta(flick, CENTER, RADIUS, 0.5),
+      12,
+    );
+  });
+
+  it('민감도를 낮춰도 회전 자체가 사라지지는 않는다', () => {
+    const lowest = flickToOmegaDelta(flick, CENTER, RADIUS, FLICK_SENSITIVITY_MIN);
+    expect(lowest).toBeGreaterThan(0);
+    expect(lowest).toBeLessThan(flickToOmegaDelta(flick, CENTER, RADIUS));
+  });
+
+  it('민감도를 올려도 OMEGA_MAX 클램프는 그대로 작동한다', () => {
+    const insane = [sample(100, -5000, 0), sample(100, 5000, 4)];
+    expect(flickToOmegaDelta(insane, CENTER, RADIUS, FLICK_SENSITIVITY_MAX)).toBe(OMEGA_MAX);
+    expect(flickToOmegaDelta(insane, CENTER, RADIUS, FLICK_SENSITIVITY_MIN)).toBe(OMEGA_MAX);
+  });
+
+  it('접선 성분이 0 이면 배율이 얼마든 0 이다', () => {
+    const radial = [sample(50, 0, 0), sample(150, 0, 20)];
+    expect(flickToOmegaDelta(radial, CENTER, RADIUS, FLICK_SENSITIVITY_MAX)).toBe(0);
+  });
+});
+
+describe('민감도 클램프 (저장소에서 돌아온 값 방어)', () => {
+  const flick = [sample(100, -5, 0), sample(100, 5, 20)];
+
+  it('범위 안의 값은 그대로 통과한다', () => {
+    for (const s of [FLICK_SENSITIVITY_MIN, 0.5, 1, 1.25, FLICK_SENSITIVITY_MAX]) {
+      expect(clampFlickSensitivity(s)).toBe(s);
+    }
+  });
+
+  it('범위를 벗어난 값은 가장 가까운 경계로 잘린다', () => {
+    expect(clampFlickSensitivity(0.001)).toBe(FLICK_SENSITIVITY_MIN);
+    expect(clampFlickSensitivity(9999)).toBe(FLICK_SENSITIVITY_MAX);
+  });
+
+  it('0 과 음수는 하한으로 잘린다 (설정이 회전 방향을 뒤집지 않는다)', () => {
+    expect(clampFlickSensitivity(0)).toBe(FLICK_SENSITIVITY_MIN);
+    expect(clampFlickSensitivity(-1)).toBe(FLICK_SENSITIVITY_MIN);
+    // 음수 배율이 새어나가면 오른쪽으로 튕겼는데 왼쪽으로 도는 일이 생긴다.
+    expect(flickToOmegaDelta(flick, CENTER, RADIUS, -1)).toBeGreaterThan(0);
+  });
+
+  it('NaN / Infinity 는 기본값으로 되돌린다', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(clampFlickSensitivity(bad)).toBe(FLICK_SENSITIVITY_DEFAULT);
+    }
+  });
+
+  it('잘못된 값이 들어와도 Δω 는 항상 유한하다', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -0, 1e308]) {
+      const delta = flickToOmegaDelta(flick, CENTER, RADIUS, bad);
+      expect(Number.isFinite(delta)).toBe(true);
+      expect(Math.abs(delta)).toBeLessThanOrEqual(OMEGA_MAX);
+    }
+  });
+
+  it('클램프된 값과 클램프 전 값이 같은 Δω 를 만든다 (경로 무관)', () => {
+    expect(flickToOmegaDelta(flick, CENTER, RADIUS, 5)).toBe(
+      flickToOmegaDelta(flick, CENTER, RADIUS, FLICK_SENSITIVITY_MAX),
     );
   });
 });

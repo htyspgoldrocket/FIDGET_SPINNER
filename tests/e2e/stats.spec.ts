@@ -36,13 +36,26 @@ async function spinOnce(page: Page, canvas: Locator): Promise<void> {
 
   const swipeY = centerY - box.height * 0.11;
   const startX = centerX - box.width * 0.28;
-  await page.mouse.move(startX, swipeY);
-  await page.mouse.down();
-  for (let i = 1; i <= 8; i += 1) {
-    await page.mouse.move(startX + (box.width * 0.56 * i) / 8, swipeY);
-    await page.waitForTimeout(12);
+
+  // 스와이프 시뮬레이션은 워커 부하에 따라 이따금 Δω = 0 으로 끝난다 — mouse.move 사이의
+  // 실제 간격이 플릭 윈도(100ms)를 넘어 마지막 샘플만 남는 경우다 (sensitivity.spec 의
+  // flickAndMeasure 와 같은 현상). 앱의 회귀가 아니라 입력 흉내의 실패이므로, 튕긴 뒤
+  // 화면이 실제로 움직이는지 확인하고 안 움직였으면 다시 튕긴다. 세 번 다 실패하면 그대로
+  // 진행한다 — 호출부의 세션 수 단언이 그것을 잡는다.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.mouse.move(startX, swipeY);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i += 1) {
+      await page.mouse.move(startX + (box.width * 0.56 * i) / 8, swipeY);
+      await page.waitForTimeout(12);
+    }
+    await page.mouse.up();
+
+    const before = await canvas.screenshot();
+    await page.waitForTimeout(120);
+    const after = await canvas.screenshot();
+    if (!before.equals(after)) break; // 회전 중
   }
-  await page.mouse.up();
 
   await page.waitForTimeout(500); // 기록 문턱을 넘기고
   await page.mouse.dblclick(centerX, centerY); // 더블탭으로 즉시 정지 → 세션 종료

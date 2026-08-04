@@ -7,6 +7,7 @@
 // 게임 루프의 `isBraking(now)` 판정과 이벤트 시각을 그대로 비교할 수 있다.
 // Date.now / performance.now 를 섞어 쓰지 않는다 (시간 소스 단일화).
 
+import { FLICK_SENSITIVITY_DEFAULT } from '../core/constants';
 import { flickToOmegaDelta, type Point2, type PointerSample } from '../core/input-model';
 
 // ── 제스처 판정 임계값 ─────────────────────────────────────────
@@ -82,11 +83,16 @@ interface TapMark {
  *    DOUBLE_TAP_WINDOW_MS / DOUBLE_TAP_MAX_DIST_PX 안에 연달아 일어난 경우.
  *    탭 판정은 브레이크 래치와 독립적이다 — BRAKE_HOLD_MS(140) 와 TAP_MAX_MS(220) 가 겹치는
  *    구간에서는 아주 짧게 브레이크가 걸렸다 풀리지만, 감속량이 0.3 rad/s 미만이라 체감되지 않는다.
+ *
+ * @param getSensitivity 플릭 민감도 배율을 돌려주는 게터. 값이 아니라 **게터**를 받는 이유는
+ *   설정 슬라이더가 움직인 순간부터 다음 플릭에 곧바로 반영되어야 하기 때문이다 — 값을 받으면
+ *   민감도가 바뀔 때마다 입력 핸들러를 떼었다 붙여야 한다. 생략하면 기본 배율이다.
  */
 export function attachPointerInput(
   target: HTMLElement,
   getGeometry: () => SpinnerGeometry,
   handlers: PointerInputHandlers,
+  getSensitivity: () => number = () => FLICK_SENSITIVITY_DEFAULT,
 ): PointerInput {
   let pointerId: number | null = null;
   let originX = 0; // 제스처 시작 시점의 target 좌상단 (뷰포트 기준). 매 move 마다 재측정하지 않는다.
@@ -182,7 +188,7 @@ export function attachPointerInput(
     clearGesture();
 
     if (!wasBraking) {
-      const delta = flickToOmegaDelta(gestureSamples, center, radius);
+      const delta = flickToOmegaDelta(gestureSamples, center, radius, getSensitivity());
       if (delta !== 0) handlers.onFlick(delta);
     }
 
