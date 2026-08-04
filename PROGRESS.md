@@ -11,10 +11,10 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 5 코드 완료 — Vercel 계정 연결(사용자 인증)만 대기** |
-| 마지막 커밋 | `feat: add PWA shell, offline service worker, and deploy config` (develop) |
-| CI 상태 | develop green (0f3e921까지) · Phase 5 push 후 재확인 |
-| 배포 URL | (없음) |
+| 현재 단계 | **Phase 5 완료 — Phase 6(실기기 튜닝) 시작 대기** |
+| 마지막 커밋 | `fix: remove comment keys from vercel.json and record deploy URL` (develop) |
+| CI 상태 | develop green · main green (PR#1 머지, 945c947) |
+| 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
 | 블로커 | 없음 |
 
 ---
@@ -69,7 +69,7 @@
 - [x] History API 기반 화면 전환 (TWA 백버튼 대비, platform/screen-history.ts)
 - [x] Playwright E2E + 시각 회귀 (win32 베이스라인 커밋, linux는 베이스라인 생기면 자동 활성)
 - [x] 성능 예산 게이트 (번들 60KB + Lighthouse CI assert, Perf 100 실측)
-- [ ] Vercel 배포 + 자동 배포 연결 — **사용자 계정 인증 대기 중** (vercel.json 등 코드 측 준비 완료)
+- [x] Vercel 배포 + 자동 배포 연결 — https://goldrocket.vercel.app (프로덕션 배포·검증 완료, git 연결 수정으로 자동 배포 활성)
 
 ### Phase 6 — 실기기 튜닝
 - [ ] `docs/DEVICE_CHECKLIST.md` 작성
@@ -85,6 +85,20 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #8 (배포)
+**완료**
+- ADR-007 승인·반영 (Lighthouse PWA 100 → e2e 검증 대체, CLAUDE.md 7장 수정)
+- develop → main PR#1 머지 (필수 체크 4개 green, 945c947)
+- 배포 트러블슈팅: ① 리포명 FIDGET_SPINNER → fidget_spinner 변경 감지, 원격 URL 갱신 ② Vercel 프로젝트(goldrocket)가 **다른 리포(htyspgoldrocket/goldrocket)에 연결돼 있어** push가 배포를 트리거하지 않던 문제 → `vercel git connect`로 fidget_spinner에 재연결 ③ vercel.json의 주석용 `"//"` 키를 Vercel 스키마가 거부 → 제거
+- CLI로 프로덕션 배포 후 원격 검증: 앱 셸/manifest(application/manifest+json)/sw.js(no-cache)/아이콘 3종 전부 200
+- **배포 URL: https://goldrocket.vercel.app** — 이후 main push마다 자동 배포
+
+**다음 할 일**
+- Phase 6: 실기기(Android Chrome) 촉감 검증 — docs/DEVICE_CHECKLIST.md 작성, 물리·햅틱 상수 튜닝
+
+**막힌 지점 / 결정 대기**
+- 없음
 
 ### 2026-08-04 — 세션 #7 (Phase 5 PWA & 배포 준비)
 **완료**

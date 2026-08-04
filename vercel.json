@@ -6,12 +6,10 @@
 
   "headers": [
     {
-      "//": "해시가 박힌 산출물은 내용이 바뀌면 이름이 바뀐다. 영구 캐시가 안전하다.",
       "source": "/assets/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "//": "서비스 워커는 절대 캐시하지 않는다. sw.js 가 CDN/브라우저 캐시에 굳으면 새 버전을 배포해도 사용자가 옛 앱에 갇힌다 — PWA 에서 가장 흔한 사고다.",
       "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
@@ -19,12 +17,10 @@
       ]
     },
     {
-      "//": "앱 셸도 캐시하지 않는다. 새 배포의 진입점이라 여기가 낡으면 옛 번들을 가리킨다.",
       "source": "/index.html",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
-      "//": "매니페스트는 작고, 이름/아이콘 변경이 즉시 반영되어야 한다. Vercel 이 .webmanifest 를 octet-stream 으로 내보내면 설치가 조용히 실패하므로 타입을 못 박는다.",
       "source": "/manifest.webmanifest",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
@@ -32,7 +28,6 @@
       ]
     },
     {
-      "//": "아이콘은 파일명에 해시가 없어 immutable 로 둘 수 없다. 하루 캐시 후 재검증. 오프라인 동작은 어차피 서비스 워커 프리캐시가 책임지고, 그쪽은 install 때 cache:'reload' 로 HTTP 캐시를 건너뛴다.",
       "source": "/(.*)\\.(png|svg|ico)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400, must-revalidate" }]
     },
