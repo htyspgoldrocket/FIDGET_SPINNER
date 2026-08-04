@@ -294,4 +294,20 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// ── 배포 갱신 ──────────────────────────────────────────────────
+// 서비스 워커는 프리캐시한 셸을 먼저 내주므로, 배포 뒤 첫 방문은 옛 화면이고 새 워커는
+// 백그라운드에서 skipWaiting + claim 으로 페이지를 넘겨받는다. 그 넘겨받는 순간
+// (controllerchange) 한 번만 새로고침해 두 번째 방문을 기다리지 않고 새 셸을 보여준다.
+// hadController 가드: 최초 설치의 claim 은 이전 컨트롤러가 없다 — 첫 화면을 리로드로
+// 날리지 않는다. reloaded 가드: 리로드는 어떤 경우에도 1회.
+if ('serviceWorker' in navigator) {
+  const hadController = navigator.serviceWorker.controller !== null;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  });
+}
+
 startLoop();

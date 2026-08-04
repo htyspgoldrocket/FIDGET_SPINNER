@@ -12,7 +12,7 @@
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
 | 현재 단계 | **Phase 6 진행 중 — 1차 실기기 피드백(민감도) 반영 완료** |
-| 마지막 커밋 | `feat: add adjustable flick sensitivity with persistent setting` (develop) |
+| 마지막 커밋 | `fix: reload once when a new service worker takes control` (develop) |
 | CI 상태 | develop green · main green (PR#1 머지, 945c947) |
 | 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
 | 블로커 | 없음 |
@@ -97,6 +97,10 @@
 - 시각 베이스라인 갱신 1장 (stats-panel win32 — 슬라이더 섹션 추가로 필연적 변경. 스피너/골든 무변경)
 - stats.spec spinOnce에 회전 확인+재시도 추가 (오케스트레이터) — 스와이프 시뮬레이션의 알려진 타이밍 플레이크 방어, 반복 실행 검증
 - 단위 229개(+30) / e2e 37개(+8, ω 실측 선형성·마이그레이션·폴백 포함) green
+
+**추가 (같은 날, 세션 후반)**
+- 실기기에서 "반영이 안 보인다" 문제 진단: 서버는 정상(서빙 번들에서 기능 확인), 원인은 SW 프리캐시의 2-스텝 갱신(배포 후 첫 방문은 옛 셸, 다음 실행부터 새 버전)
+- 수정: controllerchange 시 1회 자동 새로고침 (`eeb6a00`) — 최초 설치 리로드 방지·1회 제한 가드. 빌드 A→B 교체 실측으로 "새로고침 1회 만에 갱신" 검증 완료. e2e 37개 green
 
 **다음 할 일**
 - develop → main PR 머지 → 프로덕션 반영 → 실기기 재검증 (민감도 적정값 탐색)
