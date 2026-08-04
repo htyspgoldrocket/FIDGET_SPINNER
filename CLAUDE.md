@@ -210,7 +210,7 @@ npm run verify:full  # 전체 L0~L4 (PR 전)
 ### 성능 예산 (초과 시 CI 실패)
 - 프로덕션 JS 번들: **≤ 60KB gzip**
 - 롱프레임(>20ms) 비율: **≤ 1%** (60초 회전 측정)
-- Lighthouse PWA: **100점**, Performance: **≥ 95점**
+- Lighthouse Performance: **≥ 95점** (PWA 카테고리는 Lighthouse 12에서 제거됨 — 설치성·오프라인 검증은 `tests/e2e/pwa/`가 담당한다. ADR-007)
 
 ### L5를 메우는 장치: 디버그 오버레이
 촉감은 자동 테스트가 불가능하다. 그래서 `?debug=1` 로 켜지는 오버레이에 다음을 실시간 표시한다:

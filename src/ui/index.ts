@@ -1,0 +1,3 @@
+// 통계 화면 / 설정 / 히스토리 관리 UI 진입점.
+
+export { mountStatsPanel, type StatsPanel, type StatsPanelHandlers } from './stats-panel';

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0e1116" />
+    <meta name="description" content="손가락으로 튕겨 돌리는 햅틱 피젯 스피너." />
+    <title>FIDGET SPINNER</title>
+
+    <!-- manifest 링크와 서비스 워커 등록 스크립트는 vite-plugin-pwa 가 빌드 시 주입한다.
+         여기 적는 것은 매니페스트가 다루지 않는 아이콘 연결뿐이다. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FIDGET" />
+    <style>
+      /* 세로 고정 전면 캔버스 셸.
+         스크롤 / 오버스크롤(당겨서 새로고침) / 핀치줌 / 더블탭줌 / 텍스트 선택 /
+         길게 누르기 콜아웃을 전부 차단한다. 손가락 제스처는 전부 앱이 해석한다.
+         배경색은 canvas-renderer.ts 의 COLOR_BACKGROUND 와 같은 값이어야 한다. */
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0e1116;
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+
+      body {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+
+      #stage {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"><canvas id="stage"></canvas></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

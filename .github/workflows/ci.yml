@@ -55,8 +55,20 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: 번들 사이즈 게이트 (≤ 60KB gzip)
-        run: node scripts/check-bundle-size.mjs
+      # 번들 사이즈(≤ 60KB gzip) + Lighthouse CI.
+      # lhci 는 vite preview 로 dist 를 띄워 측정한다 (설정·점수 기준은 lighthouserc.json).
+      # Chrome 은 ubuntu-latest 러너에 이미 설치돼 있다.
+      - name: 성능 예산 게이트 (번들 + Lighthouse)
+        run: npm run test:perf
+
+      - name: Lighthouse 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: 프로덕션 의존성 0개 확인
         run: |
@@ -82,6 +94,9 @@ jobs:
 
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+
+      # PWA 스위트(tests/e2e/pwa)는 dist 를 preview 로 띄워 검증한다 — 빌드는 playwright 의
+      # webServer 가 직접 수행한다 (playwright.config.ts 참조).
       - run: npm run test:e2e
 
       - uses: actions/upload-artifact@v4

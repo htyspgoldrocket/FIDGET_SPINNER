@@ -87,3 +87,17 @@
 - 반대로 스토어에 올리는 순간 매년 target SDK 갱신 재빌드 의무가 생긴다. 재미가 검증되기 전에 떠안을 부담이 아니다.
 
 **부속 결정**: 패키지명 `kr.goldrocket.fidgetspinner`는 스토어 등록 시 영구 고정되므로 **지금 확정한다.** 표시명 `FIDGET SPINNER`는 일반명사라 스토어 검색 노출에 불리하므로, 스토어 등재명은 Phase 7에서 별도로 정한다.
+
+---
+
+## ADR-007 — "Lighthouse PWA 100점" 게이트를 E2E 검증으로 대체한다
+**날짜**: 2026-08-04 · **상태**: Accepted (사용자 승인)
+
+**배경**: CLAUDE.md 7장의 성능 예산은 "Lighthouse PWA: 100점"을 CI 게이트로 요구했다. 그러나 Phase 5에서 Lighthouse CI를 통합하는 시점의 Lighthouse 12(@lhci/cli 0.15가 사용)에서 **PWA 카테고리와 하위 감사(installable-manifest, service-worker, maskable-icon 등)가 전부 제거되어** assert할 대상 자체가 존재하지 않는다.
+
+**결정**: PWA 품질 게이트는 `tests/e2e/pwa/`의 Playwright 테스트로 대체한다. CLAUDE.md 7장 문구를 이에 맞게 수정한다. Lighthouse는 Performance ≥ 95(실측 100) 등 나머지 카테고리 assert를 유지한다.
+
+**근거**
+1. 측정 불가능한 게이트를 문서에 남겨두면 "통과 중"인지 "측정 안 함"인지 구분할 수 없다 — 죽은 규칙은 규율을 해친다.
+2. 대체 e2e가 옛 PWA 카테고리보다 강하다: 매니페스트 필수 필드 개별 검증, 아이콘 3종 실물 응답(200 + content-type + 바이트), **네트워크 차단 후 새로고침해 스피너가 실제로 그려지는 것까지** 확인한다. 옛 Lighthouse 감사는 SW 등록 여부만 봤고 오프라인 동작을 실제로 검증하지 않았다.
+3. 설치성의 최종 판정자는 Chrome 런타임이며, 그 요구 조건(매니페스트 필드 + SW + 아이콘)은 위 e2e가 전부 커버한다.

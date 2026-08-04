@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+package-lock.json
+
+# 프로젝트 문서는 손으로 쓴 한국어 산문 + 표다.
+# prettier 가 표 정렬과 줄바꿈을 다시 흘려서 헌법 문서에 의미 없는 diff 를 만든다.
+# format:check 게이트의 대상은 코드(ts/js/json/html/css)다.
+CLAUDE.md
+PROGRESS.md
+DECISIONS.md
+.claude/

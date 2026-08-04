@@ -1,0 +1,41 @@
+{
+  "$comment": [
+    "L4 성능 예산 게이트 (CLAUDE.md 7장). `npm run test:perf` 가 번들 체크 다음에 실행한다.",
+    "빌드 산출물을 측정하므로 먼저 `npm run build` 가 끝나 있어야 한다.",
+    "",
+    "**PWA 카테고리에 대하여**: CLAUDE.md 7장은 'Lighthouse PWA 100점'을 요구하지만,",
+    "Lighthouse 12 에서 PWA 카테고리와 그 하위 감사(installable-manifest, service-worker,",
+    "maskable-icon 등)가 전부 제거됐다. 여기서 assert 할 대상 자체가 없다.",
+    "그 자리는 tests/e2e/pwa/ 가 대신한다 — 매니페스트 필수 필드, 192/512/maskable 아이콘 실물",
+    "다운로드, 네트워크를 끊고 새로고침해 스피너가 그려지는지까지 직접 확인하므로 옛 PWA",
+    "카테고리보다 강한 검사다. CLAUDE.md 문구 정리는 ADR 대상이다.",
+    "",
+    "성능 외 카테고리는 스펙이 요구한 게이트가 아니라 회귀 방지용 하한이다. 접근성이 100 이",
+    "아닌 이유는 meta-viewport 의 user-scalable=no 하나뿐인데, 이는 화면 전체가 제스처 표면인",
+    "게임에서 핀치줌/더블탭줌을 막기 위한 Phase 2 의 의도된 결정이다.",
+    "",
+    "startServerReadyPattern 이 'Local:' 이 아니라 'Local' 인 이유: vite 는 색을 입혀 출력하므로",
+    "실제 바이트열이 'Local\\u001b[22m:' 이다. 콜론까지 넣으면 영영 매치되지 않고 타임아웃을",
+    "다 기다린 뒤에야 진행한다."
+  ],
+  "ci": {
+    "collect": {
+      "startServerCommand": "npm run preview -- --port 4175 --strictPort",
+      "startServerReadyPattern": "Local",
+      "url": ["http://127.0.0.1:4175/"],
+      "numberOfRuns": 3
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.95 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:best-practices": ["error", { "minScore": 0.9 }],
+        "categories:seo": ["error", { "minScore": 0.9 }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci"
+    }
+  }
+}
