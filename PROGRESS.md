@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 0 완료 — Phase 1(물리 코어) 시작 대기** |
-| 마지막 커밋 | `docs: complete Phase 0 — branch protection enabled` (develop) |
-| CI 상태 | develop green (9c4b84c 전체 잡 성공) · main 브랜치 보호 + 필수 체크 4개 활성 |
+| 현재 단계 | **Phase 1 완료 — Phase 2(렌더링 & 입력) 시작 대기** |
+| 마지막 커밋 | `feat: add input model — pointer samples to angular velocity` (develop) |
+| CI 상태 | develop push 후 확인 필요 (ubuntu에서 골든 스냅샷 결정론 첫 검증) · main 보호 활성 |
 | 배포 URL | (없음) |
 | 블로커 | 없음 |
 
@@ -34,11 +34,11 @@
 - [x] 브랜치 보호 규칙 (CI 실패 시 main 머지 차단) — PR 필수 + 필수 체크 4개 (L0-L2 / L3 / L4 / PROGRESS 가드)
 
 ### Phase 1 — 물리 코어
-- [ ] `core/constants.ts` 물리 상수 정의
-- [ ] `core/physics.ts` 고정 타임스텝 시뮬레이션
-- [ ] 단위 테스트: 감속 곡선, 정지 스냅, 클램프, death spiral 방지
-- [ ] 골든 스냅샷 기준값 생성
-- [ ] `core/input-model.ts` 포인터 샘플 → 각속도 변환 + 테스트
+- [x] `core/constants.ts` 물리 상수 정의
+- [x] `core/physics.ts` 고정 타임스텝 시뮬레이션
+- [x] 단위 테스트: 감속 곡선, 정지 스냅, 클램프, death spiral 방지
+- [x] 골든 스냅샷 기준값 생성 (시나리오 8종, CI에서 갱신 차단)
+- [x] `core/input-model.ts` 포인터 샘플 → 각속도 변환 + 테스트
 
 ### Phase 2 — 렌더링 & 입력
 - [ ] `render/canvas-renderer.ts` (DPR 대응, 3날개 스피너)
@@ -85,6 +85,22 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #3 (Phase 1 물리 코어, physics-engineer 수행)
+**완료**
+- `core/constants.ts`: CLAUDE.md 4장 물리 상수 8종 + 입력 모델 상수 (K_FLICK=18 무차원, 근거 주석 포함, Phase 6 실기기 튜닝 대상)
+- `core/physics.ts`: semi-implicit Euler, 고정 타임스텝 + accumulator, MAX_SUBSTEPS 상한. 폐기는 온전한 스텝 단위로만 하고 FIXED_DT 미만 잔여는 이월 (fmod, 결정론 유지). 정지 스냅 2겹 (한 스텝 감속량 > ω → 0 정지로 부호 진동 원천 차단, |ω| < OMEGA_STOP 스냅, -0 방지)
+- `core/input-model.ts`: 인접 샘플 쌍의 외적으로 접선 성분만 추출 (반경 성분 기여는 항등적으로 0), 시간 가중 평균, 100ms/5샘플 윈도. r는 손가락 지렛대 길이로 해석, `FLICK_MIN_LEVER_ARM_FRAC=0.15` 데드존으로 중심 근처 발산 차단
+- 테스트 79개 green: physics 34 + input-model 23 + golden 9 + harness 10. 필수 7종 + 경계 케이스 (dt=0/음수/NaN/∞, 샘플 0·1개, 시간 역행 등)
+- 골든 스냅샷 8종 (max/mid/braked/reverse/near-stop/jitter/stall-recovery/low-fps). JSON 기준값 + Object.is 비교, 갱신은 `FIDGET_UPDATE_GOLDEN=1` 필수, CI에서는 갱신 자체를 에러로 차단. 결정론 2회 실행 + 별도 프로세스 재생성 바이트 일치 확인
+
+**다음 할 일**
+- CI(ubuntu)에서 골든 스냅샷 첫 통과 확인 → 크로스 플랫폼 결정론 검증
+- Phase 2: 캔버스 렌더러 + 플릭/브레이크/더블탭 입력 연결
+
+**막힌 지점 / 결정 대기**
+- MAX_SUBSTEPS=5는 48fps 미만 지속 시 시뮬레이션이 실시간보다 느려짐 (기록 부풀림 가능성) — Phase 6 실기기 튜닝에서 재검토
+- 입력 모델의 r 해석(스피너 반경 아닌 지렛대 길이)은 물리적 타당성 기준의 판단 — 이견 시 ADR로 논의
 
 ### 2026-08-04 — 세션 #2 (리포 생성 + 골격 + L0 하네스)
 **완료**
