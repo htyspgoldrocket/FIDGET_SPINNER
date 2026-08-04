@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 6 진행 중 — 1차 실기기 피드백(민감도) 반영 완료** |
-| 마지막 커밋 | `fix: reload once when a new service worker takes control` (develop) |
-| CI 상태 | develop green · main green (PR#1 머지, 945c947) |
+| 현재 단계 | **Phase 6 진행 중 — 민감도 설정 실기기 확인 완료, 적정값 탐색 대기** |
+| 마지막 커밋 | main `604cf58` (PR#3 머지) = develop `60e37cd` |
+| CI 상태 | main green (604cf58) · develop green |
 | 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
 | 블로커 | 없음 |
 
@@ -102,9 +102,15 @@
 - 실기기에서 "반영이 안 보인다" 문제 진단: 서버는 정상(서빙 번들에서 기능 확인), 원인은 SW 프리캐시의 2-스텝 갱신(배포 후 첫 방문은 옛 셸, 다음 실행부터 새 버전)
 - 수정: controllerchange 시 1회 자동 새로고침 (`eeb6a00`) — 최초 설치 리로드 방지·1회 제한 가드. 빌드 A→B 교체 실측으로 "새로고침 1회 만에 갱신" 검증 완료. e2e 37개 green
 
+**최종 확인 (같은 날)**
+- PR#2(민감도), PR#3(SW 자동 새로고침) 모두 main 머지, CI green
+- 프로덕션(goldrocket.vercel.app)이 자동 새로고침 포함 최신 번들 서빙 중임을 원격 확인
+- **실기기에서 민감도 슬라이더 표시 확인됨 (사용자).** 이후 배포부터는 재방문 시 자동 갱신
+
 **다음 할 일**
-- develop → main PR 머지 → 프로덕션 반영 → 실기기 재검증 (민감도 적정값 탐색)
-- docs/DEVICE_CHECKLIST.md 작성 (슬라이더 터치 드래그 항목 포함)
+- 실기기에서 민감도 적정값 탐색 → 확정 시 기본값 반영 검토
+- 슬라이더 손가락 드래그 동작 확인 (touch-action: pan-y 경로 — 자동 테스트 불가 항목)
+- docs/DEVICE_CHECKLIST.md 작성 (위 항목 포함)
 
 **막힌 지점 / 결정 대기**
 - 사용자의 민감도 적정값 → 확정되면 기본값으로 굽는 것 검토
