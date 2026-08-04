@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 0 — 골격 + L0 하네스 완료. 남은 것: 브랜치 보호 규칙(수동)** |
-| 마지막 커밋 | `chore: scaffold Vite+TS project skeleton and L0 harness` (develop) |
-| CI 상태 | 워크플로 등록됨 — 이번 push가 package.json 포함 첫 실행 |
+| 현재 단계 | **Phase 0 완료 — Phase 1(물리 코어) 시작 대기** |
+| 마지막 커밋 | `docs: complete Phase 0 — branch protection enabled` (develop) |
+| CI 상태 | develop green (9c4b84c 전체 잡 성공) · main 브랜치 보호 + 필수 체크 4개 활성 |
 | 배포 URL | (없음) |
 | 블로커 | 없음 |
 
@@ -31,7 +31,7 @@
 - [x] `.claude/agents/` 서브에이전트 5종 정의
 - [x] L0 하네스: ESLint(순수성 규칙 포함) + Prettier + tsc
 - [x] GitHub Actions CI 워크플로 (파일 등록 완료 — 첫 실행 결과는 push 후 확인)
-- [ ] 브랜치 보호 규칙 (CI 실패 시 main 머지 차단) — GitHub 웹에서 수동 설정 필요
+- [x] 브랜치 보호 규칙 (CI 실패 시 main 머지 차단) — PR 필수 + 필수 체크 4개 (L0-L2 / L3 / L4 / PROGRESS 가드)
 
 ### Phase 1 — 물리 코어
 - [ ] `core/constants.ts` 물리 상수 정의
@@ -97,9 +97,11 @@
 - harness.test.ts가 명령어 계약 존재와 프로덕션 dependencies 0개를 테스트로 강제
 
 **다음 할 일**
-- GitHub 브랜치 보호 규칙 설정 (main, CI 필수) — 웹에서 수동
-- CI 첫 실행 결과 확인
 - Phase 1: `core/constants.ts` 물리 상수 + `core/physics.ts` 고정 타임스텝 시뮬레이션
+
+**세션 후반 완료 (같은 날)**
+- CI 첫 실행 develop green 확인 (9c4b84c — verify / e2e / budget 전체 성공)
+- main 브랜치 보호 규칙 설정 완료: PR 필수 + 필수 status check 4개 등록 → **Phase 0 전체 완료**
 
 **막힌 지점 / 결정 대기**
 - 문서(md) 파일은 `.prettierignore`에 넣어 format:check 대상에서 제외함 — 문서도 포맷 대상에 넣을지 결정 필요
