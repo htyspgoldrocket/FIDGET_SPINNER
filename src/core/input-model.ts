@@ -7,6 +7,9 @@ import {
   FLICK_MAX_SAMPLES,
   FLICK_MIN_LEVER_ARM_FRAC,
   FLICK_SAMPLE_WINDOW_MS,
+  FLICK_SENSITIVITY_DEFAULT,
+  FLICK_SENSITIVITY_MAX,
+  FLICK_SENSITIVITY_MIN,
   K_FLICK,
   OMEGA_MAX,
 } from './constants';
@@ -111,18 +114,41 @@ export function flickAngularVelocity(
 }
 
 /**
+ * 사용자 설정 민감도를 사용 가능한 배율로 좁힌다.
+ *
+ * **클램프가 여기 있는 이유**: 이 값은 저장소를 거쳐 돌아온다. 스키마가 바뀌었거나, 백업을
+ * 손으로 고쳤거나, 예전 버전이 다른 단위로 저장했으면 범위 밖 값·NaN 이 들어올 수 있다.
+ * 그런 값이 K_FLICK 에 그대로 곱해지면 한 번 튕겼을 때 무슨 일이 벌어질지 저장소가 정하게 된다.
+ * 읽는 쪽이 아니라 **쓰는 쪽 바로 앞**에서 막아야 어떤 경로로 들어와도 새지 않는다.
+ *
+ * 음수는 뒤집힌 회전 방향이 아니라 잘못된 값으로 본다 — 방향은 손가락이 정하는 것이지
+ * 설정이 정하는 것이 아니다. 따라서 하한으로 잘린다.
+ */
+export function clampFlickSensitivity(sensitivity: number): number {
+  if (!Number.isFinite(sensitivity)) return FLICK_SENSITIVITY_DEFAULT;
+  if (sensitivity < FLICK_SENSITIVITY_MIN) return FLICK_SENSITIVITY_MIN;
+  if (sensitivity > FLICK_SENSITIVITY_MAX) return FLICK_SENSITIVITY_MAX;
+  return sensitivity;
+}
+
+/**
  * 플릭 입력을 각속도 증가분 Δω [rad/s] 로 바꾼다.
  *
- *   Δω = K_FLICK × v_tangential / r
+ *   Δω = K_FLICK × sensitivity × v_tangential / r
  *
  * 결과는 OMEGA_MAX 로 클램프한다 (양·음 대칭). 부호 = 회전 방향.
+ *
+ * @param sensitivity 사용자 설정 민감도 배율. 생략하면 기본값(1.0) — 설정을 모르는 호출부는
+ *   이전과 정확히 같은 값을 받는다. 범위 밖 값은 clampFlickSensitivity 가 잘라낸다.
  */
 export function flickToOmegaDelta(
   samples: readonly PointerSample[],
   center: Point2,
   spinnerRadius: number,
+  sensitivity: number = FLICK_SENSITIVITY_DEFAULT,
 ): number {
-  const delta = K_FLICK * flickAngularVelocity(samples, center, spinnerRadius);
+  const gain = K_FLICK * clampFlickSensitivity(sensitivity);
+  const delta = gain * flickAngularVelocity(samples, center, spinnerRadius);
   if (!Number.isFinite(delta)) return 0;
   if (delta > OMEGA_MAX) return OMEGA_MAX;
   if (delta < -OMEGA_MAX) return -OMEGA_MAX;

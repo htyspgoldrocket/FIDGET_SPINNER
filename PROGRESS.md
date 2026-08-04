@@ -11,10 +11,10 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 5 코드 완료 — Vercel 계정 연결(사용자 인증)만 대기** |
-| 마지막 커밋 | `feat: add PWA shell, offline service worker, and deploy config` (develop) |
-| CI 상태 | develop green (0f3e921까지) · Phase 5 push 후 재확인 |
-| 배포 URL | (없음) |
+| 현재 단계 | **Phase 6 진행 중 — 1차 실기기 피드백(민감도) 반영 완료** |
+| 마지막 커밋 | `feat: add adjustable flick sensitivity with persistent setting` (develop) |
+| CI 상태 | develop green · main green (PR#1 머지, 945c947) |
+| 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
 | 블로커 | 없음 |
 
 ---
@@ -69,12 +69,13 @@
 - [x] History API 기반 화면 전환 (TWA 백버튼 대비, platform/screen-history.ts)
 - [x] Playwright E2E + 시각 회귀 (win32 베이스라인 커밋, linux는 베이스라인 생기면 자동 활성)
 - [x] 성능 예산 게이트 (번들 60KB + Lighthouse CI assert, Perf 100 실측)
-- [ ] Vercel 배포 + 자동 배포 연결 — **사용자 계정 인증 대기 중** (vercel.json 등 코드 측 준비 완료)
+- [x] Vercel 배포 + 자동 배포 연결 — https://goldrocket.vercel.app (프로덕션 배포·검증 완료, git 연결 수정으로 자동 배포 활성)
 
 ### Phase 6 — 실기기 튜닝
 - [ ] `docs/DEVICE_CHECKLIST.md` 작성
-- [ ] 실제 안드로이드 기기 촉감 검증
-- [ ] 물리·햅틱 상수 튜닝 (변경 시 골든 스냅샷 갱신 + 사유 기록)
+- [ ] 실제 안드로이드 기기 촉감 검증 (1차 피드백: "터치가 지나치게 민감" → 민감도 설정으로 대응)
+- [x] 플릭 민감도 사용자 설정 (25~150%, IndexedDB 저장, 기록 패널 슬라이더)
+- [ ] 물리·햅틱 상수 튜닝 (변경 시 골든 스냅샷 갱신 + 사유 기록) — 사용자가 민감도 적정값을 찾으면 기본값 반영 검토
 
 ### Phase 7 — Play Store (옵션, 별도 판단)
 - [ ] 도메인 확정 + `assetlinks.json`
@@ -85,6 +86,38 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #9 (Phase 6 — 플릭 민감도 조절)
+**완료**
+- 실기기 1차 피드백 "터치에 지나치게 민감" → 민감도 설정 구현 (tuning-engineer)
+- core: flickToOmegaDelta에 민감도 배율 인자(기본 1.0 — 기존 호출부 동작 불변), 클램프는 K_FLICK 곱하기 직전 (저장소發 오염값이 물리에 닿기 전 차단, 음수는 오류로 간주)
+- 저장: DB v1→v2 (settings 스토어 추가, contains 확인으로 기존 records/aggregate 무손실 마이그레이션 — e2e로 검증). StorageAdapter 인터페이스는 불변, 별도 SettingsStore. 백업 코드에 설정 미포함 (기기 이동 시 민감도는 기기 종속값)
+- UI: 기록 패널 "조작 민감도" 슬라이더 (25~150%, step 5, 게터 주입으로 다음 플릭부터 즉시 적용, 300ms 디바운스 저장 + visibility hidden 시 flush)
+- 슬라이더에 touch-action: pan-y (전역 touch-action:none 우회) — **실기기 손가락 드래그 확인 필요 (DEVICE_CHECKLIST 후보)**
+- 시각 베이스라인 갱신 1장 (stats-panel win32 — 슬라이더 섹션 추가로 필연적 변경. 스피너/골든 무변경)
+- stats.spec spinOnce에 회전 확인+재시도 추가 (오케스트레이터) — 스와이프 시뮬레이션의 알려진 타이밍 플레이크 방어, 반복 실행 검증
+- 단위 229개(+30) / e2e 37개(+8, ω 실측 선형성·마이그레이션·폴백 포함) green
+
+**다음 할 일**
+- develop → main PR 머지 → 프로덕션 반영 → 실기기 재검증 (민감도 적정값 탐색)
+- docs/DEVICE_CHECKLIST.md 작성 (슬라이더 터치 드래그 항목 포함)
+
+**막힌 지점 / 결정 대기**
+- 사용자의 민감도 적정값 → 확정되면 기본값으로 굽는 것 검토
+
+### 2026-08-04 — 세션 #8 (배포)
+**완료**
+- ADR-007 승인·반영 (Lighthouse PWA 100 → e2e 검증 대체, CLAUDE.md 7장 수정)
+- develop → main PR#1 머지 (필수 체크 4개 green, 945c947)
+- 배포 트러블슈팅: ① 리포명 FIDGET_SPINNER → fidget_spinner 변경 감지, 원격 URL 갱신 ② Vercel 프로젝트(goldrocket)가 **다른 리포(htyspgoldrocket/goldrocket)에 연결돼 있어** push가 배포를 트리거하지 않던 문제 → `vercel git connect`로 fidget_spinner에 재연결 ③ vercel.json의 주석용 `"//"` 키를 Vercel 스키마가 거부 → 제거
+- CLI로 프로덕션 배포 후 원격 검증: 앱 셸/manifest(application/manifest+json)/sw.js(no-cache)/아이콘 3종 전부 200
+- **배포 URL: https://goldrocket.vercel.app** — 이후 main push마다 자동 배포
+
+**다음 할 일**
+- Phase 6: 실기기(Android Chrome) 촉감 검증 — docs/DEVICE_CHECKLIST.md 작성, 물리·햅틱 상수 튜닝
+
+**막힌 지점 / 결정 대기**
+- 없음
 
 ### 2026-08-04 — 세션 #7 (Phase 5 PWA & 배포 준비)
 **완료**

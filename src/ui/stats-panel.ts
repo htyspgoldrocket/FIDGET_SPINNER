@@ -10,6 +10,12 @@
 // 화면 전환을 옮길 때, 훅에 history.pushState / history.back 을 꽂고 popstate 에서 open/close 를
 // 부르면 이 파일은 한 줄도 바뀌지 않는다.
 
+import {
+  FLICK_SENSITIVITY_DEFAULT,
+  FLICK_SENSITIVITY_MAX,
+  FLICK_SENSITIVITY_MIN,
+} from '../core/constants';
+import { clampFlickSensitivity } from '../core/input-model';
 import type { SpinAggregate } from '../core/stats';
 import { EMPTY_SPIN_AGGREGATE } from '../core/stats';
 import { BackupError } from '../platform/storage/adapter';
@@ -24,11 +30,27 @@ const COLOR_HIGHLIGHT = '#9ef01a';
 /** 백업 코드를 복사한 뒤 안내 문구가 남아 있는 시간 [ms]. */
 const MESSAGE_LINGER_MS = 4000;
 
+/** 민감도 슬라이더의 눈금 간격 [%]. 5%p 는 손가락으로 짚을 수 있으면서 체감이 나는 최소 단위다. */
+const SENSITIVITY_STEP_PERCENT = 5;
+
+/** 배율(0.25~1.5) → 화면·슬라이더가 쓰는 백분율. 슬라이더는 정수로만 다룬다 —
+ *  step 을 0.05 로 두면 부동소수 누적 때문에 눈금이 0.7500000000000001 같은 값에 걸린다. */
+function toPercent(sensitivity: number): number {
+  return Math.round(sensitivity * 100);
+}
+
 export interface StatsPanelHandlers {
   /** 백업 코드를 만들어 온다. 실패하면 reject — 패널이 에러 문구로 보여준다. */
   onExport(): Promise<string>;
   /** 백업 코드를 적용한다. 실패하면 reject. */
   onImport(code: string): Promise<void>;
+  /**
+   * 민감도 슬라이더가 움직였다. 매 눈금마다 불린다 (드래그 중에도).
+   *
+   * 호출부는 **즉시 적용**하고 저장은 스스로 미룬다 — 이 훅은 저장을 기다리지 않는다.
+   * 슬라이더의 반응이 IndexedDB 의 속도에 묶이면 손가락이 걸리는 느낌이 난다.
+   */
+  onSensitivityChange(sensitivity: number): void;
   /** 있으면 토글 버튼이 open() 대신 이것을 부른다 (Phase 5: history.pushState). */
   onOpenRequest?(): void;
   /** 있으면 닫기 버튼·배경 탭이 close() 대신 이것을 부른다 (Phase 5: history.back). */
@@ -41,6 +63,8 @@ export interface StatsPanel {
   isOpen(): boolean;
   /** 화면의 숫자를 갱신한다. 패널이 닫혀 있어도 값은 반영해둔다. */
   setAggregate(aggregate: SpinAggregate): void;
+  /** 슬라이더 위치를 맞춘다 (저장소에서 읽어온 값 반영). onSensitivityChange 는 불리지 않는다. */
+  setSensitivity(sensitivity: number): void;
   dispose(): void;
 }
 
@@ -239,6 +263,62 @@ export function mountStatsPanel(host: HTMLElement, handlers: StatsPanelHandlers)
   const [rowDuration, valueDuration] = createStatRow('최장 회전 시간', 'bestDurationMs');
   const [rowSessions, valueSessions] = createStatRow('세션 수', 'sessionCount');
 
+  // ── 조작 민감도 ─────────────────────────────────────────────
+  const sensitivityTitle = document.createElement('p');
+  sensitivityTitle.textContent = '조작 민감도';
+  Object.assign(sensitivityTitle.style, {
+    margin: '14px 0 0',
+    color: COLOR_MUTED,
+    font: '12px/1.4 system-ui, sans-serif',
+  });
+
+  const sensitivityHint = document.createElement('p');
+  sensitivityHint.textContent = '터치에 너무 예민하면 낮추세요. 다음 플릭부터 적용됩니다.';
+  Object.assign(sensitivityHint.style, {
+    margin: '2px 0 8px',
+    color: COLOR_MUTED,
+    font: '11px/1.45 system-ui, sans-serif',
+  });
+
+  const sensitivityRow = document.createElement('div');
+  Object.assign(sensitivityRow.style, {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  });
+
+  const sensitivitySlider = document.createElement('input');
+  sensitivitySlider.id = 'stats-sensitivity';
+  sensitivitySlider.type = 'range';
+  sensitivitySlider.min = String(toPercent(FLICK_SENSITIVITY_MIN));
+  sensitivitySlider.max = String(toPercent(FLICK_SENSITIVITY_MAX));
+  sensitivitySlider.step = String(SENSITIVITY_STEP_PERCENT);
+  sensitivitySlider.setAttribute('aria-label', '플릭 민감도');
+  Object.assign(sensitivitySlider.style, {
+    flex: '1 1 auto',
+    minWidth: '0',
+    height: '34px', // 손가락으로 잡을 수 있는 최소 높이. 트랙은 얇아도 히트 영역은 넓어야 한다.
+    accentColor: COLOR_ACCENT,
+    // html/body 가 touch-action:none 이라 터치 드래그가 슬라이더까지 오지 않는다. 여기서만
+    // 세로 팬을 허용해두면(= 가로는 여전히 브라우저가 안 가져간다) 가로 드래그가 슬라이더 몫이 되고,
+    // 패널이 길어져 세로로 넘칠 때 슬라이더 위에서 시작한 스크롤도 그대로 먹는다.
+    touchAction: 'pan-y',
+    cursor: 'pointer',
+  });
+
+  const sensitivityValue = document.createElement('span');
+  sensitivityValue.id = 'stats-sensitivity-value';
+  Object.assign(sensitivityValue.style, {
+    flex: '0 0 auto',
+    // 25%~150% 사이에서 자릿수가 바뀌어도 슬라이더 끝이 밀리지 않게 폭을 고정한다.
+    minWidth: '48px',
+    textAlign: 'right',
+    color: COLOR_HIGHLIGHT,
+    font: '600 14px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace',
+  });
+
+  sensitivityRow.append(sensitivitySlider, sensitivityValue);
+
   const backupTitle = document.createElement('p');
   backupTitle.textContent = '백업 코드';
   Object.assign(backupTitle.style, {
@@ -313,6 +393,9 @@ export function mountStatsPanel(host: HTMLElement, handlers: StatsPanelHandlers)
     rowRevolutions,
     rowDuration,
     rowSessions,
+    sensitivityTitle,
+    sensitivityHint,
+    sensitivityRow,
     backupTitle,
     backupHint,
     exportRow,
@@ -420,6 +503,23 @@ export function mountStatsPanel(host: HTMLElement, handlers: StatsPanelHandlers)
     );
   }
 
+  /** 슬라이더 위치와 % 표시를 한 값으로 맞춘다. 이벤트는 발생시키지 않는다. */
+  function paintSensitivity(sensitivity: number): void {
+    const percent = toPercent(sensitivity);
+    sensitivitySlider.value = String(percent);
+    sensitivityValue.textContent = `${String(percent)}%`;
+    // 화면 표기는 반올림된 %지만, 검증(e2e)과 접근성 도구에는 실제 배율을 그대로 남긴다.
+    sensitivityValue.dataset['value'] = String(sensitivity);
+    sensitivitySlider.setAttribute('aria-valuetext', `${String(percent)}%`);
+  }
+
+  /** 드래그 중에도 눈금마다 불린다 — 표시는 여기서, 저장은 호출부가 미뤄서 한다. */
+  function onSensitivityInput(): void {
+    const sensitivity = clampFlickSensitivity(Number(sensitivitySlider.value) / 100);
+    paintSensitivity(sensitivity);
+    handlers.onSensitivityChange(sensitivity);
+  }
+
   function onImportClick(): void {
     const code = importCode.value;
     if (code.trim() === '') {
@@ -452,6 +552,7 @@ export function mountStatsPanel(host: HTMLElement, handlers: StatsPanelHandlers)
   exportButton.addEventListener('click', onExportClick);
   copyButton.addEventListener('click', onCopyClick);
   importButton.addEventListener('click', onImportClick);
+  sensitivitySlider.addEventListener('input', onSensitivityInput);
 
   const panel: StatsPanel = {
     open,
@@ -469,6 +570,10 @@ export function mountStatsPanel(host: HTMLElement, handlers: StatsPanelHandlers)
       valueSessions.dataset['value'] = String(aggregate.sessionCount);
     },
 
+    setSensitivity(sensitivity: number): void {
+      paintSensitivity(clampFlickSensitivity(sensitivity));
+    },
+
     dispose(): void {
       if (messageTimer !== 0) window.clearTimeout(messageTimer);
       toggle.removeEventListener('click', onToggleClick);
@@ -477,10 +582,12 @@ export function mountStatsPanel(host: HTMLElement, handlers: StatsPanelHandlers)
       exportButton.removeEventListener('click', onExportClick);
       copyButton.removeEventListener('click', onCopyClick);
       importButton.removeEventListener('click', onImportClick);
+      sensitivitySlider.removeEventListener('input', onSensitivityInput);
       root.remove();
     },
   };
 
   panel.setAggregate(EMPTY_SPIN_AGGREGATE);
+  panel.setSensitivity(FLICK_SENSITIVITY_DEFAULT);
   return panel;
 }

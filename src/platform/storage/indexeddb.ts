@@ -12,29 +12,42 @@
 import { mergeSpin, type SpinAggregate } from '../../core/stats';
 import {
   BACKUP_RECORD_LIMIT,
+  DEFAULT_SETTINGS,
   EMPTY_AGGREGATE,
   encodeBackup,
   decodeBackup,
   readAggregate,
   readRecord,
+  readSettings,
   toAggregate,
   toCompletedSpin,
   type Aggregate,
   type BackupPayload,
+  type Settings,
+  type SettingsStore,
   type SpinRecord,
   type StorageAdapter,
 } from './adapter';
 
 const DB_NAME = 'fidget-spinner';
 
-/** DB 스키마 버전. 스토어 구성을 바꿀 때만 올린다 (레코드의 schemaVersion 과 별개다). */
-const DB_VERSION = 1;
+/** DB 스키마 버전. 스토어 구성을 바꿀 때만 올린다 (레코드의 schemaVersion 과 별개다).
+ *
+ *  이력:
+ *   - v1: records + aggregate
+ *   - v2: settings 추가 (Phase 6, 플릭 민감도). 기존 두 스토어는 손대지 않는다 — onupgradeneeded
+ *         는 `contains` 로 없는 것만 만들고, 있는 스토어는 데이터째 그대로 넘어온다. */
+const DB_VERSION = 2;
 
 const RECORD_STORE = 'records';
 const AGGREGATE_STORE = 'aggregate';
+const SETTINGS_STORE = 'settings';
 
 /** 집계값은 스토어에 하나뿐이다. 고정 키로 덮어쓴다. */
 const AGGREGATE_KEY = 'current';
+
+/** 설정도 하나뿐이다. 집계값과 같은 방식. */
+const SETTINGS_KEY = 'current';
 
 /** 레코드를 최신순으로 훑기 위한 인덱스. */
 const TS_INDEX = 'ts';
@@ -47,9 +60,12 @@ interface Backend {
   getAggregate(): Promise<Aggregate>;
   putRecord(record: SpinRecord): Promise<void>;
   listRecords(limit: number, cursor?: string): Promise<SpinRecord[]>;
-  /** 백업 불러오기. 기존 내용을 전부 지우고 payload 로 바꾼다. */
+  /** 백업 불러오기. **기록만** 교체한다 — 설정은 백업 대상이 아니다 (adapter.ts 참조). */
   replaceAll(payload: BackupPayload): Promise<void>;
+  /** 기록을 전부 지운다. 설정은 남는다 — 설정은 기록이 아니라 이 기기의 조작 취향이다. */
   clear(): Promise<void>;
+  getSettings(): Promise<Settings>;
+  putSettings(settings: Settings): Promise<void>;
 }
 
 /** 페이지 커서. `listRecords` 가 돌려준 마지막 레코드로부터 다음 페이지의 커서를 만든다. */
@@ -73,6 +89,7 @@ function parseCursor(cursor: string | undefined): { ts: number; id: string } | n
 export function createMemoryBackend(): Backend {
   let records: SpinRecord[] = [];
   let aggregate: Aggregate = EMPTY_AGGREGATE;
+  let settings: Settings = DEFAULT_SETTINGS;
 
   /** ts 내림차순, 동률이면 id 내림차순 — IndexedDB 인덱스 순회와 순서를 맞춘다. */
   function sorted(): SpinRecord[] {
@@ -119,6 +136,18 @@ export function createMemoryBackend(): Backend {
       aggregate = EMPTY_AGGREGATE;
       return Promise.resolve();
     },
+
+    // 검증은 저장할 때가 아니라 **읽을 때** 한다. IndexedDB 쪽은 다른 탭이나 예전 버전이 써넣은
+    // 값을 만날 수 있어 어차피 읽는 쪽에서 걸러야 하고, 두 백엔드가 같은 지점에서 걸러야
+    // 폴백이 본 경로와 다르게 동작하지 않는다.
+    getSettings(): Promise<Settings> {
+      return Promise.resolve(readSettings(settings) ?? DEFAULT_SETTINGS);
+    },
+
+    putSettings(next: Settings): Promise<void> {
+      settings = next;
+      return Promise.resolve();
+    },
   };
 }
 
@@ -142,8 +171,11 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
 /**
  * DB 를 연다. 스토어가 없으면 onupgradeneeded 에서 만든다.
  *
- * 스토어를 `contains` 로 확인하고 만드는 것은 앞으로 DB_VERSION 을 올릴 때를 위한 것이다.
- * 버전 2 로 올라가는 기존 사용자의 DB 에는 이미 스토어가 있으므로 그때도 이 코드가 그대로 돈다.
+ * **마이그레이션 방식: 덧붙이기만 한다.** 각 스토어를 `contains` 로 확인하고 없을 때만 만들므로,
+ * v1 사용자의 DB 가 v2 로 올라올 때 records / aggregate 는 손대지 않은 채 settings 만 새로 생긴다
+ * (IndexedDB 는 삭제하지 않은 스토어를 버전 업 과정에서 그대로 유지한다). 이 함수에
+ * `deleteObjectStore` 나 데이터 변환이 등장하는 순간 기존 기록이 위험해진다 — 그런 변경이
+ * 필요해지면 새 스토어를 만들어 옮기고, 옮긴 것을 확인한 뒤 다음 버전에서 지운다.
  */
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -172,6 +204,9 @@ function openDatabase(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(AGGREGATE_STORE)) {
         db.createObjectStore(AGGREGATE_STORE);
+      }
+      if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
+        db.createObjectStore(SETTINGS_STORE);
       }
     };
 
@@ -299,6 +334,19 @@ function createIndexedDbBackend(db: IDBDatabase): Backend {
       tx.objectStore(AGGREGATE_STORE).clear();
       await done;
     },
+
+    async getSettings(): Promise<Settings> {
+      const tx = db.transaction(SETTINGS_STORE, 'readonly');
+      const stored = await requestToPromise(tx.objectStore(SETTINGS_STORE).get(SETTINGS_KEY));
+      return readSettings(stored) ?? DEFAULT_SETTINGS;
+    },
+
+    async putSettings(settings: Settings): Promise<void> {
+      const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+      const done = transactionDone(tx);
+      tx.objectStore(SETTINGS_STORE).put(settings, SETTINGS_KEY);
+      await done;
+    },
   };
 }
 
@@ -314,7 +362,7 @@ function createIndexedDbBackend(db: IDBDatabase): Backend {
  * 교체는 "코드를 넣으면 그 코드의 상태가 된다"는 한 문장으로 설명되고, 되돌리려면 넣기 전에
  * 내보내둔 코드를 다시 넣으면 된다 — 정확히 대칭이다.
  */
-function createAdapter(backendPromise: Promise<Backend>): StorageAdapter {
+function createAdapter(backendPromise: Promise<Backend>): StorageAdapter & SettingsStore {
   return {
     async getAggregate(): Promise<Aggregate> {
       return (await backendPromise).getAggregate();
@@ -346,6 +394,14 @@ function createAdapter(backendPromise: Promise<Backend>): StorageAdapter {
     async clear(): Promise<void> {
       await (await backendPromise).clear();
     },
+
+    async getSettings(): Promise<Settings> {
+      return (await backendPromise).getSettings();
+    },
+
+    async putSettings(s: Settings): Promise<void> {
+      await (await backendPromise).putSettings(s);
+    },
   };
 }
 
@@ -353,7 +409,8 @@ function createAdapter(backendPromise: Promise<Backend>): StorageAdapter {
  * 실제 저장소를 만든다. DB 열기는 비동기지만 어댑터는 즉시 돌려준다 — 앱 조립이 저장소를
  * 기다리지 않는다. 열기에 실패하면 인메모리로 떨어지고, 그 사실을 `usingFallback` 으로 알린다.
  */
-export function createStorage(): StorageAdapter & { readonly usingFallback: Promise<boolean> } {
+export function createStorage(): StorageAdapter &
+  SettingsStore & { readonly usingFallback: Promise<boolean> } {
   let resolveFallback: (value: boolean) => void = () => {};
   const usingFallback = new Promise<boolean>((resolve) => {
     resolveFallback = resolve;
@@ -374,7 +431,7 @@ export function createStorage(): StorageAdapter & { readonly usingFallback: Prom
 }
 
 /** 인메모리 전용 저장소. 단위 테스트와 폴백 검증에 쓴다. */
-export function createMemoryStorage(): StorageAdapter {
+export function createMemoryStorage(): StorageAdapter & SettingsStore {
   return createAdapter(Promise.resolve(createMemoryBackend()));
 }
 
