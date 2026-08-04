@@ -101,8 +101,8 @@
 - ADR 후보: CLAUDE.md 7장 "Lighthouse PWA 100" — Lighthouse 12에서 PWA 카테고리 자체가 제거되어 측정 불가. e2e(tests/e2e/pwa/)가 매니페스트·오프라인을 더 강하게 검증 중. 문구 수정은 사용자 승인 대기
 
 **막힌 지점 / 결정 대기**
-- Vercel 인증 (vercel login 또는 대시보드 리포 import)
-- CLAUDE.md 7장 PWA 100 문구의 ADR 처리 여부
+- ~~Vercel 인증~~ → 사용자가 대시보드에서 리포 import 완료 (2026-08-04)
+- ~~CLAUDE.md 7장 PWA 100 문구~~ → ADR-007 승인·반영 완료. 프로덕션 배포는 develop → main PR 머지로 트리거
 
 ### 2026-08-04 — 세션 #6 (Phase 4 기록 시스템)
 **완료**
