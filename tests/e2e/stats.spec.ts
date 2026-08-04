@@ -49,9 +49,17 @@ async function spinOnce(page: Page, canvas: Locator): Promise<void> {
   await page.waitForTimeout(150);
 }
 
+/**
+ * 패널이 열린 상태로 만든다.
+ *
+ * 이미 열려 있으면 토글을 누르지 않는다 — Phase 5 부터 패널은 히스토리 엔트리에 대응하므로,
+ * 패널을 연 채 새로고침하면 그대로 다시 열린 상태로 복원된다(tests/e2e/history.spec.ts).
+ * 그때 토글 버튼은 카드에 가려 숨어 있어서 클릭할 수 없다.
+ */
 async function openPanel(page: Page): Promise<void> {
-  await page.locator('#stats-toggle').click();
-  await expect(page.locator('#stats-panel')).toBeVisible();
+  const panel = page.locator('#stats-panel');
+  if (!(await panel.isVisible())) await page.locator('#stats-toggle').click();
+  await expect(panel).toBeVisible();
 }
 
 async function closePanel(page: Page): Promise<void> {

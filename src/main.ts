@@ -16,6 +16,7 @@ import {
 } from './core/stats';
 import { detectCapability, mountUnsupportedNotice } from './platform/capability';
 import { attachPointerInput } from './platform/pointer-input';
+import { attachScreenHistory } from './platform/screen-history';
 import { newSpinRecord } from './platform/storage/adapter';
 import { aggregateStats, createStorage } from './platform/storage/indexeddb';
 import { createHapticDriver } from './platform/vibration-driver';
@@ -61,7 +62,13 @@ const statsPanel = mountStatsPanel(document.body, {
     aggregate = aggregateStats(await storage.getAggregate());
     statsPanel.setAggregate(aggregate);
   },
+  // 패널 열고 닫기는 히스토리를 거친다 — 안드로이드 백버튼으로 닫히게 하기 위해서다.
+  // 훅은 mount 시점이 아니라 클릭 시점에 불리므로 아래에서 채워도 늦지 않는다.
+  onOpenRequest: () => statsHistory.requestOpen(),
+  onCloseRequest: () => statsHistory.requestClose(),
 });
+
+const statsHistory = attachScreenHistory('stats', statsPanel);
 
 // 어느 경로로 저장되고 있는지 DOM 에 남긴다. 실기기에서 "기록이 안 남는다"를 진단할 때,
 // 폴백으로 떨어졌는지(저장소 차단) 저장 자체가 실패했는지를 가르는 유일한 단서다.

@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 4 완료 — Phase 5(PWA & 배포) 진행 중** |
-| 마지막 커밋 | `feat: implement record system with IndexedDB storage and stats panel` (develop) |
-| CI 상태 | develop green (754ee99까지) · Phase 4 push 후 재확인 |
+| 현재 단계 | **Phase 5 코드 완료 — Vercel 계정 연결(사용자 인증)만 대기** |
+| 마지막 커밋 | `feat: add PWA shell, offline service worker, and deploy config` (develop) |
+| CI 상태 | develop green (0f3e921까지) · Phase 5 push 후 재확인 |
 | 배포 URL | (없음) |
 | 블로커 | 없음 |
 
@@ -64,12 +64,12 @@
 - [x] 백업 코드 내보내기·불러오기 (import는 교체 방식 — 사유는 세션 #6 로그)
 
 ### Phase 5 — PWA & 배포
-- [ ] `manifest.webmanifest` 완비 (maskable 아이콘 포함)
-- [ ] Service Worker (오프라인 100%)
-- [ ] History API 기반 화면 전환 (TWA 백버튼 대비)
-- [ ] Playwright E2E + 시각 회귀
-- [ ] 성능 예산 게이트 (번들 60KB / Lighthouse)
-- [ ] Vercel 배포 + 자동 배포 연결
+- [x] `manifest.webmanifest` 완비 (maskable 아이콘 포함, 아이콘은 scripts/generate-icons.mjs로 SVG에서 생성)
+- [x] Service Worker (오프라인 100%, injectManifest + 자작 60줄, sw.js 0.9KB gzip)
+- [x] History API 기반 화면 전환 (TWA 백버튼 대비, platform/screen-history.ts)
+- [x] Playwright E2E + 시각 회귀 (win32 베이스라인 커밋, linux는 베이스라인 생기면 자동 활성)
+- [x] 성능 예산 게이트 (번들 60KB + Lighthouse CI assert, Perf 100 실측)
+- [ ] Vercel 배포 + 자동 배포 연결 — **사용자 계정 인증 대기 중** (vercel.json 등 코드 측 준비 완료)
 
 ### Phase 6 — 실기기 튜닝
 - [ ] `docs/DEVICE_CHECKLIST.md` 작성
@@ -85,6 +85,24 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #7 (Phase 5 PWA & 배포 준비)
+**완료**
+- manifest.webmanifest 필수 필드 완비. 아이콘 192/512/maskable-512는 spinner-reference.svg에서 Playwright로 래스터화 (`npm run icons`), maskable은 안전영역 계산으로 별도 파일
+- SW: vite-plugin-pwa injectManifest + 자작 프리캐시 온리 (60줄, 0.9KB gzip — generateSW의 워크박스 런타임 회피). 캐시명에 목록 지문, autoUpdate 실측 검증. includeManifestIcons 중복 → addAll 전체 실패 함정 회피
+- History API: screen-history.ts — 열 때만 push, 루트에서 가짜 엔트리 없음(TWA 백버튼 = 종료 정상), 우리가 push한 엔트리일 때만 back() (아니면 close만 — 닫기 버튼이 앱을 끄는 사고 방지), 새로고침 시 패널 복원
+- 시각 회귀: 베이스라인 없는 플랫폼은 skip (CI 안전) + 자기 기준 검사(정지 화면 2회 촬영 동일성)는 전 플랫폼 실행. 갱신은 FIDGET_UPDATE_VISUAL=1 필수, CI 금지
+- Lighthouse CI를 test:perf에 통합, assert 실효성 역검증(강제 실패 확인). 실측: **Perf 100 / BP 100 / SEO 100 / A11y 91** (user-scalable=no — 게임 특성상 의도된 감점)
+- vercel.json: sw.js no-cache(굳으면 옛 앱에 갇힘), 해시 에셋 immutable, manifest Content-Type 명시
+- 단위 199(+10) / e2e 29(+13, dev·preview 이중 webServer) green. 번들 11.8KB gzip
+
+**다음 할 일**
+- Vercel 계정 연결 (사용자 인증 필요) → 배포 → 실기기 URL 전달
+- ADR 후보: CLAUDE.md 7장 "Lighthouse PWA 100" — Lighthouse 12에서 PWA 카테고리 자체가 제거되어 측정 불가. e2e(tests/e2e/pwa/)가 매니페스트·오프라인을 더 강하게 검증 중. 문구 수정은 사용자 승인 대기
+
+**막힌 지점 / 결정 대기**
+- Vercel 인증 (vercel login 또는 대시보드 리포 import)
+- CLAUDE.md 7장 PWA 100 문구의 ADR 처리 여부
 
 ### 2026-08-04 — 세션 #6 (Phase 4 기록 시스템)
 **완료**

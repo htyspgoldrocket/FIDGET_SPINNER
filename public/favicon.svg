@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" width="480" height="480">
+  <defs>
+    <filter id="glowB" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="480" height="480" fill="#0e1116"/>
+  <g transform="translate(240,275.650) scale(1.15)">
+    <g filter="url(#glowB)">
+      <g stroke="#39d5ff" stroke-width="8" fill="none" stroke-linecap="round">
+        <line x1="0" y1="0" x2="0" y2="-66" transform="rotate(0)"/>
+        <line x1="0" y1="0" x2="0" y2="-66" transform="rotate(120)"/>
+        <line x1="0" y1="0" x2="0" y2="-66" transform="rotate(240)"/>
+        <g transform="rotate(0)">
+          <circle cx="0" cy="-124" r="60"/>
+          <circle cx="0" cy="-124" r="28" stroke="#9ef01a" stroke-width="6"/>
+        </g>
+        <g transform="rotate(120)">
+          <circle cx="0" cy="-124" r="60"/>
+          <circle cx="0" cy="-124" r="28" stroke="#9ef01a" stroke-width="6"/>
+        </g>
+        <g transform="rotate(240)">
+          <circle cx="0" cy="-124" r="60"/>
+          <circle cx="0" cy="-124" r="28" stroke="#9ef01a" stroke-width="6"/>
+        </g>
+        <circle r="48"/>
+        <circle r="20" stroke="#9ef01a" stroke-width="6"/>
+      </g>
+    </g>
+  </g>
+</svg>
