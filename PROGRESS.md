@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 2 완료 — Phase 3(햅틱) 시작 대기** |
-| 마지막 커밋 | `feat: implement neon spinner renderer and pointer input` (develop) |
-| CI 상태 | develop green (ab801f6에서 골든 스냅샷 ubuntu 결정론 검증 완료) · 이번 push 후 재확인 |
+| 현재 단계 | **Phase 3 완료 — Phase 4(기록 시스템) 진행 중** |
+| 마지막 커밋 | `feat: implement detent haptics with pulse scheduler and debug overlay` (develop) |
+| CI 상태 | develop green (d156b0c까지) · Phase 3 push 후 재확인 |
 | 배포 URL | (없음) |
 | 블로커 | 없음 |
 
@@ -48,13 +48,13 @@
 - [x] 세로 고정 / 오버스크롤·줌 차단 / Wake Lock
 
 ### Phase 3 — 햅틱 (핵심)
-- [ ] `core/haptic-scheduler.ts` 디텐트 펄스 시점 계산
-- [ ] `MIN_PULSE_GAP_MS` 가드 + 드랍 카운터
-- [ ] `platform/vibration-driver.ts` (유일 호출 지점)
-- [ ] 웜업 펄스 / visibility 변경 시 즉시 정지
-- [ ] `platform/capability.ts` iOS·Firefox 감지 + 폴백 안내 배너
-- [ ] `render/debug-overlay.ts` (`?debug=1`)
-- [ ] 목킹 기반 타임스탬프 시퀀스 테스트
+- [x] `core/haptic-scheduler.ts` 디텐트 펄스 시점 계산 (펄스 길이 = 디텐트 간격 듀티 1/3, [8,18] 클램프)
+- [x] `MIN_PULSE_GAP_MS` 가드 + 드랍 카운터 (가드는 실제 호출 시각 기준 — 프레임당 최대 1펄스 구조 보장)
+- [x] `platform/vibration-driver.ts` (유일 호출 지점, VibrationHost 주입 구조)
+- [x] 웜업 펄스 / visibility 변경 시 즉시 정지
+- [x] `platform/capability.ts` iOS·Firefox 감지 + 폴백 안내 배너
+- [x] `render/debug-overlay.ts` (`?debug=1`)
+- [x] 목킹 기반 타임스탬프 시퀀스 테스트 (단위 44개 + e2e 5개, 실브라우저 vibrate 간격 검증 포함)
 
 ### Phase 4 — 기록 시스템
 - [ ] `platform/storage/adapter.ts` 인터페이스
@@ -85,6 +85,25 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #5 (Phase 3 햅틱, haptics-specialist 수행)
+**완료**
+- 햅틱 상수 6종(CLAUDE.md 5장 표) + 파생 상수(DETENT_ANGLE, PULSE_DETENT_DUTY, RPM_PER_RAD_PER_SEC) constants.ts에 추가. 물리 상수 미변경, 골든 9종 그대로 통과
+- 스케줄러: 펄스 길이는 ω 선형이 아니라 "디텐트 간격의 1/3 듀티"를 [8,18]로 클램프 (간격 대비 펄스가 길면 클릭감이 뭉개짐). 가드는 이상적 통과 시각이 아니라 **실제 발사(프레임) 시각** 기준 — 실호출 간격 25ms 미만 0건이 진짜 보장되고, 프레임당 최대 1펄스가 구조적으로 성립
+- 정지 마무리 펄스(30ms)는 가드에 걸리면 드랍이 아니라 다음 프레임으로 보류 (마무리 소실 방지)
+- 드라이버: VibrationHost 인터페이스로 브라우저 전역 격리 (node 환경 시퀀스 테스트 가능). visibility 구독은 드라이버가 직접 — 루프 정지와 무관하게 vibrate(0) 보장
+- capability: describePlatform 순수 함수, iOS/Firefox는 API 존재 주장과 무관하게 미지원 처리. 배너는 pointer-events:none 컨테이너로 플릭 방해 없음
+- 디버그 오버레이(?debug=1): ω/RPM, fired/dropped, 펄스 타임라인(3초), frame dt/substeps/히스토그램/long%
+- 테스트 123개(+44) green, e2e 8개(+5, 실브라우저 vibrate 타임스탬프 간격 검증 포함), 번들 5.79KB gzip
+
+**다음 할 일**
+- Phase 4: storage adapter/IndexedDB, core/stats.ts (RPM_PER_RAD_PER_SEC 재정의 금지), 통계 UI, 백업 코드
+- Phase 5: PWA (manifest/SW/History API), 시각 회귀, Lighthouse, Vercel 배포
+
+**막힌 지점 / 결정 대기 (Phase 6 실기기 관찰 항목)**
+- 오디오 클릭·화면 셰이크 폴백 미구현 (배너+Noop까지만) — UX 결정 필요
+- 펄스 간격의 프레임 양자화: 60fps 실질 최대 발사율 초당 30회 — "고속에서 성기다" 느껴지면 재검토
+- BRAKE 저속 펄스 27ms > 가드 25ms — 이전 펄스 잘림 가능성 낮지만 관찰
 
 ### 2026-08-04 — 세션 #4 (Phase 2 렌더링 & 입력)
 **완료**
