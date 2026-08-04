@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── L0 + L1 + L2 : 빠른 게이트 ──────────────────────────────
+  verify:
+    name: L0-L2 · typecheck / lint / unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: L0 · TypeScript strict
+        run: npm run typecheck
+
+      - name: L0 · ESLint (불변식 강제)
+        run: npm run lint
+
+      - name: L0 · Prettier
+        run: npm run format:check
+
+      - name: L1+L2 · 단위 테스트 & 골든 스냅샷
+        run: npm run test:unit
+
+  # ── L4 : 성능 예산 ──────────────────────────────────────────
+  budget:
+    name: L4 · 번들 예산
+    runs-on: ubuntu-latest
+    needs: verify
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: 번들 사이즈 게이트 (≤ 60KB gzip)
+        run: node scripts/check-bundle-size.mjs
+
+      - name: 프로덕션 의존성 0개 확인
+        run: |
+          DEPS=$(node -p "Object.keys(require('./package.json').dependencies || {}).length")
+          echo "runtime dependencies: $DEPS"
+          if [ "$DEPS" -ne 0 ]; then
+            echo "::error::CLAUDE.md 규칙 6 위반 — 프로덕션 의존성은 0개를 유지한다."
+            exit 1
+          fi
+
+  # ── L3 : E2E ────────────────────────────────────────────────
+  e2e:
+    name: L3 · Playwright 모바일 E2E
+    runs-on: ubuntu-latest
+    needs: verify
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ── 문서 보존 규율 확인 ─────────────────────────────────────
+  progress-guard:
+    name: PROGRESS.md 갱신 확인
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: src 변경 시 PROGRESS.md도 갱신되었는지 확인
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          if echo "$CHANGED" | grep -q '^src/'; then
+            if ! echo "$CHANGED" | grep -q '^PROGRESS.md$'; then
+              echo "::error::CLAUDE.md 보존 규칙 — src 변경 시 PROGRESS.md를 함께 갱신한다."
+              exit 1
+            fi
+          fi
+          echo "OK"
