@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-04 |
-| 현재 단계 | **Phase 0 — 기획 확정 완료, 리포지토리 미생성** |
-| 마지막 커밋 | (없음) |
-| CI 상태 | (없음) |
+| 현재 단계 | **Phase 0 — 골격 + L0 하네스 완료. 남은 것: 브랜치 보호 규칙(수동)** |
+| 마지막 커밋 | `chore: scaffold Vite+TS project skeleton and L0 harness` (develop) |
+| CI 상태 | 워크플로 등록됨 — 이번 push가 package.json 포함 첫 실행 |
 | 배포 URL | (없음) |
 | 블로커 | 없음 |
 
@@ -26,12 +26,12 @@
 - [x] `CLAUDE.md` 작성
 - [x] `PROGRESS.md` 작성
 - [x] `DECISIONS.md` 작성
-- [ ] GitHub 리포지토리 생성 + 초기 push
-- [ ] Vite + TypeScript(strict) 프로젝트 골격
-- [ ] `.claude/agents/` 서브에이전트 5종 정의
-- [ ] L0 하네스: ESLint(순수성 규칙 포함) + Prettier + tsc
-- [ ] GitHub Actions CI 워크플로
-- [ ] 브랜치 보호 규칙 (CI 실패 시 main 머지 차단)
+- [x] GitHub 리포지토리 생성 + 초기 push
+- [x] Vite + TypeScript(strict) 프로젝트 골격
+- [x] `.claude/agents/` 서브에이전트 5종 정의
+- [x] L0 하네스: ESLint(순수성 규칙 포함) + Prettier + tsc
+- [x] GitHub Actions CI 워크플로 (파일 등록 완료 — 첫 실행 결과는 push 후 확인)
+- [ ] 브랜치 보호 규칙 (CI 실패 시 main 머지 차단) — GitHub 웹에서 수동 설정 필요
 
 ### Phase 1 — 물리 코어
 - [ ] `core/constants.ts` 물리 상수 정의
@@ -85,6 +85,25 @@
 ---
 
 ## 세션 로그
+
+### 2026-08-04 — 세션 #2 (리포 생성 + 골격 + L0 하네스)
+**완료**
+- GitHub 리포 연결, 파일 구조 정리(scripts/, .github/workflows/, .claude/agents/), 첫 커밋 + main/develop push
+- Vite + TypeScript(strict, noUncheckedIndexedAccess) 골격 — CLAUDE.md 3장 구조 그대로 스텁만 생성, 로직 없음
+- 명령어 계약 9개 등록: typecheck / lint / format:check / test:unit / test:e2e / test:perf / verify / verify:full / build
+- 설정: tsconfig / vite.config / vitest.config / playwright.config(모바일 에뮬레이션) / .prettierrc / .prettierignore
+- **eslint 실효성 검증 (test-harness-engineer 수행)**: core 프로브 파일로 15개 에러 검출 확인. 우회 경로 2건 발견·수정 — ① core 밖에서 `window.sessionStorage`·`globalThis.localStorage`가 통과하던 구멍을 객체 무관 MemberExpression 셀렉터로 봉쇄, ② vibration-driver.ts 예외가 규칙 전체를 끄던 것을 vibrate 셀렉터만 해제하도록 축소. globals 미선언으로 scripts/가 no-undef 나던 것도 수정. 프로브 파일은 삭제됨
+- `npm run verify` green (typecheck + lint + 단위 테스트 10개), `npm run build` 성공 (번들 0.4KB gzip / 예산 60KB)
+- harness.test.ts가 명령어 계약 존재와 프로덕션 dependencies 0개를 테스트로 강제
+
+**다음 할 일**
+- GitHub 브랜치 보호 규칙 설정 (main, CI 필수) — 웹에서 수동
+- CI 첫 실행 결과 확인
+- Phase 1: `core/constants.ts` 물리 상수 + `core/physics.ts` 고정 타임스텝 시뮬레이션
+
+**막힌 지점 / 결정 대기**
+- 문서(md) 파일은 `.prettierignore`에 넣어 format:check 대상에서 제외함 — 문서도 포맷 대상에 넣을지 결정 필요
+- 배포 도메인 미정 (기존과 동일)
 
 ### 2026-08-04 — 세션 #1 (기획)
 **완료**
