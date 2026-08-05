@@ -165,6 +165,62 @@ test('민감도가 도달 가능한 최고 속도까지 낮춘다 (연속 플릭
   expect(errors).toEqual([]);
 });
 
+test('터치 포인터 드래그로 슬라이더가 끌린다 (실기기 경로)', async ({ page }) => {
+  // 실기기(Android Chrome)에서 네이티브 터치 드래그가 전역 touch-action:none 에 막히는 것이
+  // 확인되어, 패널이 터치/펜 포인터를 직접 값으로 바꾼다 (src/ui/panel.ts). 여기서는 그 커스텀
+  // 경로를 합성 PointerEvent(pointerType: 'touch')로 검증한다 — 브라우저의 제스처 판정은
+  // 이제 이 경로에 관여하지 않으므로 합성 이벤트로도 실기기와 같은 코드가 돈다.
+  const errors = collectErrors(page);
+  await gotoFirstRun(page);
+  await openPanel(page, 'settings');
+
+  await page.locator('#stats-sensitivity').evaluate((element) => {
+    const slider = element as HTMLInputElement;
+    const rect = slider.getBoundingClientRect();
+    const at = (fraction: number): PointerEvent =>
+      new PointerEvent('pointermove', {
+        pointerId: 7,
+        pointerType: 'touch',
+        isPrimary: true,
+        bubbles: true,
+        clientX: rect.left + rect.width * fraction,
+        clientY: rect.top + rect.height / 2,
+      });
+    // 오른쪽 90% 지점을 짚고 왼쪽 10% 지점까지 끈다.
+    slider.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 7,
+        pointerType: 'touch',
+        isPrimary: true,
+        bubbles: true,
+        clientX: rect.left + rect.width * 0.9,
+        clientY: rect.top + rect.height / 2,
+      }),
+    );
+    slider.dispatchEvent(at(0.5));
+    slider.dispatchEvent(at(0.1));
+    slider.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerId: 7,
+        pointerType: 'touch',
+        isPrimary: true,
+        bubbles: true,
+        clientX: rect.left + rect.width * 0.1,
+        clientY: rect.top + rect.height / 2,
+      }),
+    );
+  });
+
+  // 10% 지점 = 25 + 0.1×(150−25) = 37.5 → 5 눈금 스냅으로 35 또는 40.
+  const percent = await sensitivityPercent(page);
+  expect(percent, '터치 드래그가 슬라이더 값을 바꾸지 못했다').toBeGreaterThanOrEqual(35);
+  expect(percent).toBeLessThanOrEqual(40);
+  // % 표시와 실제 배율(data-value)도 같은 값으로 따라와야 한다 — input 훅이 불렸다는 증거다.
+  await expect(page.locator('#stats-sensitivity-value')).toHaveText(`${String(percent)}%`);
+
+  expect(errors).toEqual([]);
+});
+
 test('설정한 민감도가 IndexedDB 에 남아 새로고침 뒤에도 유지된다', async ({ page }) => {
   const errors = collectErrors(page);
   await gotoFirstRun(page);
@@ -216,10 +272,18 @@ test('슬라이더를 끌어도 스피너가 돌지 않는다', async ({ page })
   const canvas = page.locator('#stage');
 
   // 먼저 이 스와이프가 정말 스피너를 돌린다는 것을 확인해둔다. 이게 없으면 아래 단언은
-  // "플릭이 원래 안 먹는다"로도 통과해버린다.
-  await flick(page);
+  // "플릭이 원래 안 먹는다"로도 통과해버린다. 스와이프 흉내는 워커가 붐빌 때 이따금 헛나가므로
+  // (helpers.ts 의 flick 주석) 돌 때까지 다시 튕긴다 — 앱의 회귀가 아니라 입력 흉내의 실패다.
   const spun = await rowChecksum(canvas, 0.35);
-  await expect.poll(() => rowChecksum(canvas, 0.35)).not.toBe(spun);
+  await expect
+    .poll(
+      async () => {
+        await flick(page);
+        return rowChecksum(canvas, 0.35);
+      },
+      { timeout: 20_000 },
+    )
+    .not.toBe(spun);
   await halt(page);
 
   await openPanel(page, 'settings');
