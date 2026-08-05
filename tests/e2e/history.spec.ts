@@ -9,16 +9,12 @@
 // `history.length` 로는 2번을 검증할 수 없다. back() 은 포인터만 뒤로 옮길 뿐 길이를 줄이지
 // 않기 때문이다(앞쪽 엔트리는 다음 pushState 까지 남는다). 그래서 길이 대신 **실제로 뒤로
 // 가보고** 앱을 벗어났는지를 본다. 이것이 사용자가 겪는 동작 그대로다.
+//
+// 최초 실행 설명서도 히스토리 엔트리를 만든다 — 자동으로 열린 패널이 백버튼으로 닫혀야
+// 하기 때문이다. gotoFirstRun 이 그 엔트리를 닫기 버튼으로 되감아 루트 상태를 만들어준다.
 import { expect, test, type Page } from '@playwright/test';
 
-function collectErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
-  });
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  return errors;
-}
+import { collectErrors, gotoFirstRun, selectTab } from './helpers';
 
 /**
  * "지금 뒤로가면 앱이 종료되는 자리"인지 확인한다.
@@ -41,11 +37,30 @@ test('루트 상태에서는 뒤로가기가 곧바로 앱을 나간다 (가짜 
   page,
 }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
 
-  // 앱이 뜨고 잠시 돌아도 히스토리에는 아무것도 쌓이지 않는다.
+  // 설명서를 닫고 나면 그 엔트리도 함께 사라진다. 앱이 잠시 더 돌아도 아무것도 쌓이지 않는다.
   await page.waitForTimeout(250);
+  await expectBackWouldExitApp(page);
+
+  expect(errors).toEqual([]);
+});
+
+test('최초 실행 설명서가 백버튼 한 번으로 닫힌다', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+
+  // 자동으로 열린 패널도 히스토리 엔트리를 만든다 — 백버튼이 앱을 끄면 안 된다.
+  const panel = page.locator('#stats-panel');
+  await expect(panel).toBeVisible();
+  await expect(page.locator('#tab-manual')).toHaveAttribute('aria-selected', 'true');
+  expect(await page.evaluate(() => window.history.state)).toEqual({ screen: 'stats' });
+
+  await page.goBack();
+  await expect(panel).toBeHidden();
+  await expect(page.locator('#stats-toggle')).toBeVisible();
+
+  // 그리고 지금은 루트다 — 여기서 한 번 더 뒤로가면 앱이 종료된다.
   await expectBackWouldExitApp(page);
 
   expect(errors).toEqual([]);
@@ -53,8 +68,7 @@ test('루트 상태에서는 뒤로가기가 곧바로 앱을 나간다 (가짜 
 
 test('패널을 열면 히스토리가 쌓이고 뒤로가기가 패널을 닫는다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
 
   const panel = page.locator('#stats-panel');
   await expect(panel).toBeHidden();
@@ -75,10 +89,30 @@ test('패널을 열면 히스토리가 쌓이고 뒤로가기가 패널을 닫�
   expect(errors).toEqual([]);
 });
 
+test('탭을 여러 번 바꿔도 백버튼 한 번이면 패널이 닫힌다', async ({ page }) => {
+  const errors = collectErrors(page);
+  await gotoFirstRun(page);
+
+  const panel = page.locator('#stats-panel');
+  await page.locator('#stats-toggle').click();
+  await expect(panel).toBeVisible();
+
+  // 탭 전환은 히스토리 엔트리를 만들지 않는다. 만들면 백버튼을 탭 수만큼 눌러야 패널이 닫힌다.
+  for (const tab of ['settings', 'manual', 'stats', 'settings'] as const) {
+    await selectTab(page, tab);
+    expect(await page.evaluate(() => window.history.state)).toEqual({ screen: 'stats' });
+  }
+
+  await page.goBack();
+  await expect(panel).toBeHidden();
+  await expectBackWouldExitApp(page);
+
+  expect(errors).toEqual([]);
+});
+
 test('닫기 버튼으로 닫아도 히스토리가 되감긴다 (엔트리가 새지 않는다)', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
 
   const panel = page.locator('#stats-panel');
   const toggle = page.locator('#stats-toggle');
@@ -99,8 +133,7 @@ test('닫기 버튼으로 닫아도 히스토리가 되감긴다 (엔트리가 �
 
 test('배경을 탭해 닫아도 뒤로가기 한 번이면 앱을 나간다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
 
   const panel = page.locator('#stats-panel');
   await page.locator('#stats-toggle').click();
@@ -119,8 +152,7 @@ test('배경을 탭해 닫아도 뒤로가기 한 번이면 앱을 나간다', a
 
 test('패널을 연 채 새로고침하면 패널이 그대로 열려 있다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
 
   await page.locator('#stats-toggle').click();
   await expect(page.locator('#stats-panel')).toBeVisible();

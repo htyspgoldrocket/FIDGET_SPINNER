@@ -7,21 +7,7 @@
 // (부수 효과로 런타임/개발 의존성이 하나도 늘지 않는다 — CLAUDE.md 불변식 6.)
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-/** 콘솔 error 와 잡히지 않은 예외를 모아둔다. 저장 실패는 어떤 경우에도 콘솔로 새면 안 된다. */
-function collectErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
-  });
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  return errors;
-}
-
-/** 통계 항목의 원시값 (data-value). 화면 표기와 무관하게 숫자로 비교한다. */
-async function statValue(page: Page, key: string): Promise<number> {
-  const text = await page.locator(`[data-stat="${key}"]`).getAttribute('data-value');
-  return text === null ? Number.NaN : Number(text);
-}
+import { closePanel, collectErrors, gotoFirstRun, openPanel, statValue } from './helpers';
 
 /**
  * 스피너를 튕겨 한 세션을 만들고 더블탭으로 닫는다.
@@ -62,29 +48,10 @@ async function spinOnce(page: Page, canvas: Locator): Promise<void> {
   await page.waitForTimeout(150);
 }
 
-/**
- * 패널이 열린 상태로 만든다.
- *
- * 이미 열려 있으면 토글을 누르지 않는다 — Phase 5 부터 패널은 히스토리 엔트리에 대응하므로,
- * 패널을 연 채 새로고침하면 그대로 다시 열린 상태로 복원된다(tests/e2e/history.spec.ts).
- * 그때 토글 버튼은 카드에 가려 숨어 있어서 클릭할 수 없다.
- */
-async function openPanel(page: Page): Promise<void> {
-  const panel = page.locator('#stats-panel');
-  if (!(await panel.isVisible())) await page.locator('#stats-toggle').click();
-  await expect(panel).toBeVisible();
-}
-
-async function closePanel(page: Page): Promise<void> {
-  await page.locator('#stats-close').click();
-  await expect(page.locator('#stats-panel')).toBeHidden();
-}
-
 test('통계 패널이 열리고 회전 기록이 값으로 나타난다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
   const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
 
   // 실브라우저에서는 인메모리 폴백이 아니라 IndexedDB 경로로 붙어야 한다.
   await expect.poll(() => page.locator('html').getAttribute('data-storage')).toBe('indexeddb');
@@ -116,9 +83,8 @@ test('통계 패널이 열리고 회전 기록이 값으로 나타난다', async
 
 test('기록이 IndexedDB 에 남아 새로고침 뒤에도 유지된다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
   const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
 
   await spinOnce(page, canvas);
   await openPanel(page);
@@ -138,9 +104,8 @@ test('기록이 IndexedDB 에 남아 새로고침 뒤에도 유지된다', async
 
 test('백업 코드를 내보내고 다시 불러오면 그 시점의 기록으로 돌아간다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
   const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
 
   // 세션 1개 → 백업 코드 확보
   await spinOnce(page, canvas);
@@ -186,9 +151,8 @@ test('백업 코드를 내보내고 다시 불러오면 그 시점의 기록으�
 
 test('잘못된 백업 코드는 에러 문구로 알리고 기록을 건드리지 않는다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
   const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
 
   await spinOnce(page, canvas);
   await openPanel(page);
@@ -211,9 +175,8 @@ test('잘못된 백업 코드는 에러 문구로 알리고 기록을 건드리�
 
 test('패널이 닫혀 있으면 플릭을 가로채지 않는다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
   const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
 
   // 패널 루트는 화면 전체를 덮지만 pointer-events:none 이라 캔버스가 그대로 받는다.
   const box = await canvas.boundingBox();
@@ -242,9 +205,8 @@ test('IndexedDB 가 막혀 있어도 앱이 죽지 않고 인메모리로 동작
     });
   });
 
-  await page.goto('/');
+  await gotoFirstRun(page);
   const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
 
   await expect.poll(() => page.locator('html').getAttribute('data-storage')).toBe('memory');
 

@@ -55,6 +55,8 @@ export interface StorageAdapter {
 export type Settings = {
   /** 플릭 민감도 배율. FLICK_SENSITIVITY_MIN ~ MAX 범위 (core 가 사용 직전에 다시 클램프한다). */
   flickSensitivity: number;
+  /** 최초 실행 설명서를 본 적이 있는가. 한 번 닫으면 다시 자동으로 띄우지 않는다. */
+  manualSeen: boolean;
   schemaVersion: 1;
 };
 
@@ -64,9 +66,10 @@ export interface SettingsStore {
   putSettings(s: Settings): Promise<void>;
 }
 
-/** 설정을 건드린 적 없는 사용자의 값. */
+/** 설정을 건드린 적 없는 사용자의 값. manualSeen: false — 첫 실행에는 설명서가 뜬다. */
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
   flickSensitivity: FLICK_SENSITIVITY_DEFAULT,
+  manualSeen: false,
   schemaVersion: SCHEMA_VERSION,
 });
 
@@ -241,6 +244,9 @@ export function readSettings(value: unknown): Settings | null {
 
   return {
     flickSensitivity: clampFlickSensitivity(flickSensitivity),
+    // manualSeen 이 없던 버전(v2 초기)이 저장한 설정도 그대로 읽힌다. 필드가 없으면 "안 봤다"로
+    // 두는 쪽이 안전하다 — 설명서가 한 번 더 뜨는 것은 사고가 아니지만, 영영 안 뜨는 것은 사고다.
+    manualSeen: value['manualSeen'] === true,
     schemaVersion: SCHEMA_VERSION,
   };
 }

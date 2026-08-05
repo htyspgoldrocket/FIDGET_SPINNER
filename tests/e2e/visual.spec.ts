@@ -22,6 +22,8 @@
 import { existsSync } from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
+import { dismissFirstRunManual, openPanel } from './helpers';
+
 // 베이스라인 생성은 골든 스냅샷과 같은 규약을 쓴다 (tests/golden/spindown.test.ts):
 //
 //   FIDGET_UPDATE_VISUAL=1 npx playwright test visual --update-snapshots
@@ -53,10 +55,16 @@ function skipWithoutBaseline(testInfo: TestInfo, name: string): void {
   );
 }
 
-/** 정지 상태의 앱을 띄운다. 스피너는 입력이 없으면 θ = 0 에서 움직이지 않는다. */
+/**
+ * 정지 상태의 앱을 띄운다. 스피너는 입력이 없으면 θ = 0 에서 움직이지 않는다.
+ *
+ * 새 프로필이라 설명서가 자동으로 열린다. 스피너 샷은 캔버스의 배치 상자를 그대로 잘라내므로
+ * 그 위에 겹친 패널까지 함께 찍힌다 — 반드시 먼저 치운다.
+ */
 async function gotoIdle(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.locator('#stage')).toBeVisible();
+  await dismissFirstRunManual(page);
   // 첫 프레임과 오프스크린 글로우 캐시가 완성될 시간을 준다.
   await page.waitForTimeout(300);
 }
@@ -70,15 +78,40 @@ test('정지 상태 스피너', async ({ page }, testInfo) => {
   });
 });
 
-test('통계 패널', async ({ page }, testInfo) => {
+test('기록 탭', async ({ page }, testInfo) => {
   await gotoIdle(page);
-  await page.locator('#stats-toggle').click();
-  await expect(page.locator('#stats-panel')).toBeVisible();
+  await openPanel(page, 'stats');
 
   skipWithoutBaseline(testInfo, 'stats-panel.png');
 
   // 기록이 없는 새 프로필이라 숫자는 전부 0 이다 — 실행마다 값이 달라지지 않는다.
   await expect(page.locator('#stats-panel')).toHaveScreenshot('stats-panel.png', {
+    animations: 'disabled',
+    caret: 'hide',
+  });
+});
+
+test('설정 탭', async ({ page }, testInfo) => {
+  await gotoIdle(page);
+  await openPanel(page, 'settings');
+
+  skipWithoutBaseline(testInfo, 'settings-panel.png');
+
+  // 슬라이더는 저장된 값이 없으면 항상 기본값(100%)에 서 있다.
+  await expect(page.locator('#stats-panel')).toHaveScreenshot('settings-panel.png', {
+    animations: 'disabled',
+    caret: 'hide',
+  });
+});
+
+test('설명서 탭', async ({ page }, testInfo) => {
+  await gotoIdle(page);
+  await openPanel(page, 'manual');
+
+  skipWithoutBaseline(testInfo, 'manual-panel.png');
+
+  // 최초 실행에서 사용자가 처음 보게 되는 화면이다. 문구가 잘리거나 줄이 무너지면 여기서 잡힌다.
+  await expect(page.locator('#stats-panel')).toHaveScreenshot('manual-panel.png', {
     animations: 'disabled',
     caret: 'hide',
   });
