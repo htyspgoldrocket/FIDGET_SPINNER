@@ -1,0 +1,9 @@
+# TWA 디렉토리는 설정과 문서만 커밋한다.
+#
+# - android.keystore / 자격증명 파일: 서명 키. 유출되면 안 되고, 분실하면 영구 업데이트 불가.
+#   git 에는 절대 올리지 않는다 — 백업은 docs/RELEASE.md 의 절차대로 별도 보관.
+# - 나머지 안드로이드 프로젝트 파일: bubblewrap update 가 twa-manifest.json 에서 전부
+#   재생성하는 보일러플레이트라 커밋할 필요가 없다.
+*
+!.gitignore
+!twa-manifest.json

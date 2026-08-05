@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kr.goldrocket.fidgetspinner",
+      "sha256_cert_fingerprints": [
+        "72:D6:C9:24:E7:9A:53:6D:75:DD:B8:3C:1C:92:F7:CA:78:28:90:EB:E4:2C:31:EC:82:E1:DA:9B:E4:4F:9D:FC"
+      ]
+    }
+  }
+]

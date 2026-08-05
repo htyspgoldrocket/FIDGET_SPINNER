@@ -1,0 +1,42 @@
+{
+  "packageId": "kr.goldrocket.fidgetspinner",
+  "host": "goldrocket-fidget-spinner.vercel.app",
+  "name": "FIDGET SPINNER",
+  "launcherName": "FIDGET",
+  "display": "standalone",
+  "themeColor": "#0e1116",
+  "themeColorDark": "#0e1116",
+  "navigationColor": "#0e1116",
+  "navigationColorDark": "#0e1116",
+  "navigationDividerColor": "#0e1116",
+  "navigationDividerColorDark": "#0e1116",
+  "backgroundColor": "#0e1116",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://goldrocket-fidget-spinner.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://goldrocket-fidget-spinner.vercel.app/icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://goldrocket-fidget-spinner.vercel.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://goldrocket-fidget-spinner.vercel.app/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

@@ -80,11 +80,11 @@
 - [보류] `docs/DEVICE_CHECKLIST.md` 작성 — Phase 7 진행 중 병행 가능
 
 ### Phase 7 — Play Store
-- [x] 도메인 확정: **https://goldrocket-fidget-spinner.vercel.app** (2026-08-05 사용자 결정, 프로젝트 도메인으로 추가 완료. 기존 goldrocket.vercel.app 도 병행 유지 — 기록 이사는 백업 코드로)
-- [ ] `assetlinks.json` 배치 (서명 인증서 SHA-256 확보 후 — Play App Signing 등록과 맞물림)
-- [ ] Bubblewrap AAB 빌드 (패키지명 `kr.goldrocket.fidgetspinner`)
-- [ ] keystore 백업 절차 수립
-- [ ] 개발자 계정 등록 / 비공개 테스트 12명 × 14일
+- [x] 도메인 확정: **https://goldrocket-fidget-spinner.vercel.app** (프로젝트 리네임으로 기본 주소화)
+- [x] Bubblewrap AAB 빌드 — `twa/app-release-bundle.aab` (서명·검증 완료) + 테스트용 `app-release-signed.apk`. 빌드 절차·환경 우회 3종은 docs/RELEASE.md
+- [x] `assetlinks.json` 배치 (업로드 키 지문. **Play 등록 후 앱 서명 키 지문 추가 필요** — RELEASE.md) — main 머지 시 배포됨
+- [x] keystore 생성 + 백업 절차 문서화 (docs/RELEASE.md — **사용자 백업 실행 확인 필요**)
+- [ ] 개발자 계정 등록 ($25, 사용자) → AAB 업로드 → 앱 서명 키 지문 assetlinks 추가 → 비공개 테스트 12명 × 14일
 
 ---
 
@@ -103,10 +103,18 @@
 - 리네임 후 원격 검증: 새 주소에서 앱 셸/번들/sw.js/manifest/아이콘 3종 전부 200. `.well-known/assetlinks.json` 은 아직 404 (예정대로 미배치)
 - 로컬 `.vercel/project.json` 의 projectName 갱신. 옛 goldrocket.vercel.app 은 당분간 응답하나 보장 없음
 
+**추가 (같은 날) — AAB 빌드 완료**
+- Bubblewrap + JDK17 + Android SDK(cmdline-tools) 설치. 이 머신 특유의 장애 3종을 우회하고 빌드 성공:
+  ① cmd 가 현재 디렉토리 실행파일을 안 찾음 → GradleWrapper.js 절대경로 로컬 패치
+  ② 힙 1.5GB 확보 실패 → gradle.properties -Xmx768m/데몬 off ③ SDK 루트(cmdline-tools)의 자기 패키지 선언 때문에 AGP 가 platforms 인식 불가 → 정션으로 표준 루트 구성 + local.properties (상세 docs/RELEASE.md)
+- 1차 keystore 는 비밀번호가 빌드 로그에 노출되어 폐기·재생성 (Play 등록 전이라 무해). AAB/APK 를 새 키로 서명, jarsigner/apksigner 검증 통과
+- assetlinks.json 을 public/.well-known/ 에 배치 (업로드 키 지문), dist 포함 확인. verify green
+- docs/RELEASE.md 신설 — 빌드 재현 절차 / 키 백업 규칙 / Play 제출 순서 / assetlinks 갱신 절차
+
 **다음 할 일**
-- 사용자: Google Play 개발자 계정 등록 ($25)
-- Bubblewrap 으로 TWA AAB 빌드 → keystore 생성·백업 절차 → assetlinks.json (서명 SHA-256 확보 후) 배치
-- 실기기 기록을 새 도메인으로 이사 (백업 코드 내보내기/불러오기) — 사용자 안내 필요
+- 사용자: ① keystore + 비밀번호 파일 백업 (리포 밖 2곳) ② PR 머지 (assetlinks 배포) ③ Play 개발자 계정 등록 → AAB 업로드
+- 업로드 후: Play 앱 서명 키 SHA-256 을 assetlinks 에 추가 배포 (RELEASE.md 절차)
+- 실기기 기록 이사 (옛 주소 → 새 주소, 백업 코드) — 필요 시
 
 **막힌 지점 / 결정 대기**
 - 없음
