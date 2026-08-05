@@ -79,15 +79,32 @@
 - [~] "완벽하지는 않다"(사용자) 상태로 종료 — 잔여 다듬기(민감도 기본값 확정, 물리·햅틱 상수 튜닝)는 Phase 7 이후 필요 시 재개
 - [보류] `docs/DEVICE_CHECKLIST.md` 작성 — Phase 7 진행 중 병행 가능
 
-### Phase 7 — Play Store (옵션, 별도 판단)
-- [ ] 도메인 확정 + `assetlinks.json`
-- [ ] Bubblewrap AAB 빌드
+### Phase 7 — Play Store
+- [x] 도메인 확정: **https://goldrocket-fidget-spinner.vercel.app** (2026-08-05 사용자 결정, 프로젝트 도메인으로 추가 완료. 기존 goldrocket.vercel.app 도 병행 유지 — 기록 이사는 백업 코드로)
+- [ ] `assetlinks.json` 배치 (서명 인증서 SHA-256 확보 후 — Play App Signing 등록과 맞물림)
+- [ ] Bubblewrap AAB 빌드 (패키지명 `kr.goldrocket.fidgetspinner`)
 - [ ] keystore 백업 절차 수립
 - [ ] 개발자 계정 등록 / 비공개 테스트 12명 × 14일
 
 ---
 
 ## 세션 로그
+
+### 2026-08-05 — 세션 #11 (Phase 7 시작 — TWA 도메인 확정)
+**완료**
+- 사용자 결정: 커스텀 도메인 구매 없이 vercel.app 서브도메인 사용, 이름은 `goldrocket-fidget-spinner`
+- Vercel 프로젝트(goldrocket)에 도메인 추가 (CLI 토큰 + 프로젝트 도메인 API — `vercel domains add` 는 vercel.app 서브도메인을 거부함). verified: true
+- 원격 검증: https://goldrocket-fidget-spinner.vercel.app 에서 앱 셸/최신 번들/sw.js/manifest 전부 200
+- 기존 goldrocket.vercel.app 은 병행 유지 (방법 2 — 안전한 이행). **TWA 는 새 도메인에 묶는다**
+- Vercel CLI 재설치됨 (기존 인증 htyspgoldrocket 유효)
+
+**다음 할 일**
+- 사용자: Google Play 개발자 계정 등록 ($25)
+- Bubblewrap 으로 TWA AAB 빌드 → keystore 생성·백업 절차 → assetlinks.json (서명 SHA-256 확보 후) 배치
+- 실기기 기록을 새 도메인으로 이사 (백업 코드 내보내기/불러오기) — 사용자 안내 필요
+
+**막힌 지점 / 결정 대기**
+- 없음
 
 ### 2026-08-05 — 세션 #10 (Phase 6 — 민감도 실효화 + 탭 UI + 설명서)
 **완료**
