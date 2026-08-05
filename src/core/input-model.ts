@@ -132,6 +132,21 @@ export function clampFlickSensitivity(sensitivity: number): number {
 }
 
 /**
+ * 이 민감도로 플릭해서 **도달할 수 있는 최고 각속도** [rad/s] 를 돌려준다.
+ *
+ * **게인만 스케일하면 설정이 사실상 사라진다**: Δω 만 줄여도 플릭을 두세 번 연달아 넣으면
+ * 어떤 민감도에서든 결국 OMEGA_MAX 에 붙는다. 그러면 "민감도를 바꿔도 똑같이 돈다"가 된다.
+ * 민감도는 한 번의 세기뿐 아니라 **그 설정에서 스피너가 얼마나 빨라질 수 있는지**도 정해야
+ * 강약 조절이 화면에 남는다.
+ *
+ * 1.0 이상은 상한을 올리지 않는다 — OMEGA_MAX 는 물리 상한이지 취향이 아니다.
+ * 범위 밖·NaN 방어는 clampFlickSensitivity 가 이미 하므로 그대로 재사용한다.
+ */
+export function flickOmegaCap(sensitivity: number): number {
+  return OMEGA_MAX * Math.min(1, clampFlickSensitivity(sensitivity));
+}
+
+/**
  * 플릭 입력을 각속도 증가분 Δω [rad/s] 로 바꾼다.
  *
  *   Δω = K_FLICK × sensitivity × v_tangential / r

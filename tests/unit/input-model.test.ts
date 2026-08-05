@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clampFlickSensitivity,
   flickAngularVelocity,
+  flickOmegaCap,
   flickToOmegaDelta,
   selectFlickSamples,
   type PointerSample,
@@ -261,6 +262,44 @@ describe('민감도 클램프 (저장소에서 돌아온 값 방어)', () => {
     expect(flickToOmegaDelta(flick, CENTER, RADIUS, 5)).toBe(
       flickToOmegaDelta(flick, CENTER, RADIUS, FLICK_SENSITIVITY_MAX),
     );
+  });
+});
+
+describe('민감도가 정하는 속도 상한 (flickOmegaCap)', () => {
+  it('1.0 미만이면 상한이 그 비율만큼 낮아진다', () => {
+    expect(flickOmegaCap(FLICK_SENSITIVITY_MIN)).toBe(OMEGA_MAX * FLICK_SENSITIVITY_MIN); // 52.5
+    expect(flickOmegaCap(0.5)).toBe(OMEGA_MAX * 0.5);
+  });
+
+  it('1.0 이상은 OMEGA_MAX 를 넘지 않는다 (물리 상한은 설정 대상이 아니다)', () => {
+    expect(flickOmegaCap(FLICK_SENSITIVITY_DEFAULT)).toBe(OMEGA_MAX);
+    expect(flickOmegaCap(FLICK_SENSITIVITY_MAX)).toBe(OMEGA_MAX);
+    expect(flickOmegaCap(9999)).toBe(OMEGA_MAX);
+  });
+
+  it('오염된 값은 clampFlickSensitivity 를 거쳐 안전한 상한이 된다', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(flickOmegaCap(bad)).toBe(OMEGA_MAX); // 기본값 1.0 경유
+    }
+    for (const bad of [0, -1, 0.001]) {
+      expect(flickOmegaCap(bad)).toBe(OMEGA_MAX * FLICK_SENSITIVITY_MIN); // 하한 경유
+    }
+  });
+
+  it('상한은 항상 유한하고 양수다 (0 이 되면 스피너가 아예 안 돈다)', () => {
+    for (const s of [FLICK_SENSITIVITY_MIN, 0.4, 1, FLICK_SENSITIVITY_MAX, Number.NaN, -5]) {
+      const cap = flickOmegaCap(s);
+      expect(Number.isFinite(cap)).toBe(true);
+      expect(cap).toBeGreaterThan(0);
+      expect(cap).toBeLessThanOrEqual(OMEGA_MAX);
+    }
+  });
+
+  it('민감도가 높을수록 상한도 단조 증가한다', () => {
+    const caps = [0.25, 0.5, 0.75, 1, 1.5].map(flickOmegaCap);
+    for (let i = 1; i < caps.length; i += 1) {
+      expect(caps[i]!).toBeGreaterThanOrEqual(caps[i - 1]!);
+    }
   });
 });
 

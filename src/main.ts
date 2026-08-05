@@ -3,9 +3,8 @@
 // 시간 소스는 rAF 타임스탬프 하나뿐이다. 포인터 입력이 쓰는 event.timeStamp 와 같은 시계라
 // 브레이크 홀드 판정이 프레임 시각과 그대로 비교된다. Date.now 는 쓰지 않는다.
 
-import { FLICK_SENSITIVITY_DEFAULT } from './core/constants';
 import { createHapticState, scheduleHaptics, type HapticState } from './core/haptic-scheduler';
-import { clampFlickSensitivity } from './core/input-model';
+import { clampFlickSensitivity, flickOmegaCap } from './core/input-model';
 import { advance, applyImpulse, createSpinState, halt, type SpinState } from './core/physics';
 import {
   createStatsState,
@@ -19,13 +18,13 @@ import {
 import { detectCapability, mountUnsupportedNotice } from './platform/capability';
 import { attachPointerInput } from './platform/pointer-input';
 import { attachScreenHistory } from './platform/screen-history';
-import { SCHEMA_VERSION, newSpinRecord } from './platform/storage/adapter';
+import { DEFAULT_SETTINGS, newSpinRecord, type Settings } from './platform/storage/adapter';
 import { aggregateStats, createStorage } from './platform/storage/indexeddb';
 import { createHapticDriver } from './platform/vibration-driver';
 import { createWakeLock } from './platform/wake-lock';
 import { createCanvasRenderer } from './render/canvas-renderer';
 import { createDebugOverlay, isDebugEnabled, type DebugOverlay } from './render/debug-overlay';
-import { mountStatsPanel } from './ui';
+import { mountPanel } from './ui';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage');
 if (canvas === null) throw new Error('#stage 캔버스를 찾지 못했다.');
@@ -57,62 +56,67 @@ let stats: StatsState = createStatsState();
 const storage = createStorage();
 let aggregate: SpinAggregate = EMPTY_SPIN_AGGREGATE;
 
-// ── 조작 민감도 ────────────────────────────────────────────────
-// 슬라이더는 이 변수 하나만 바꾼다. 입력 레이어는 플릭이 끝나는 순간 게터로 읽어가므로
+// ── 사용자 설정 ────────────────────────────────────────────────
+// 슬라이더·설명서는 이 객체 하나만 바꾼다. 입력 레이어는 플릭이 끝나는 순간 게터로 읽어가므로
 // 새로 붙일 것도, 다시 조립할 것도 없다 — 다음 플릭부터 바로 새 값이다.
 //
 // 저장만 미룬다. 슬라이더를 한 번 끌면 눈금 수만큼 input 이 오는데, 그때마다 쓰면
 // 저장 트랜잭션이 줄줄이 밀려 마지막 값이 언제 확정되는지 알 수 없게 된다.
 
-const SENSITIVITY_SAVE_DEBOUNCE_MS = 300;
+const SETTINGS_SAVE_DEBOUNCE_MS = 300;
 
-let flickSensitivity = FLICK_SENSITIVITY_DEFAULT;
+const settings: Settings = { ...DEFAULT_SETTINGS };
 /** 저장소에서 읽어오기 전에 사용자가 먼저 슬라이더를 움직였는가. 그랬다면 읽어온 값으로 덮지 않는다. */
 let sensitivityTouched = false;
-let sensitivitySaveTimer = 0;
+let settingsSaveTimer = 0;
 
-function writeSensitivity(): void {
+function writeSettings(): void {
   // 실패는 삼킨다. 적용은 이미 끝났고, 못 남긴 것은 다음 조작 때 다시 시도된다.
-  void storage
-    .putSettings({ flickSensitivity, schemaVersion: SCHEMA_VERSION })
-    .catch(() => undefined);
+  void storage.putSettings({ ...settings }).catch(() => undefined);
 }
 
-function saveSensitivitySoon(): void {
-  if (sensitivitySaveTimer !== 0) window.clearTimeout(sensitivitySaveTimer);
-  sensitivitySaveTimer = window.setTimeout(() => {
-    sensitivitySaveTimer = 0;
-    writeSensitivity();
-  }, SENSITIVITY_SAVE_DEBOUNCE_MS);
+function saveSettingsSoon(): void {
+  if (settingsSaveTimer !== 0) window.clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = window.setTimeout(() => {
+    settingsSaveTimer = 0;
+    writeSettings();
+  }, SETTINGS_SAVE_DEBOUNCE_MS);
 }
 
 /** 미뤄둔 저장이 있으면 지금 쓴다. 탭이 숨겨질 때 부른다 — 안드로이드는 예고 없이 페이지를 버린다. */
-function flushSensitivity(): void {
-  if (sensitivitySaveTimer === 0) return;
-  window.clearTimeout(sensitivitySaveTimer);
-  sensitivitySaveTimer = 0;
-  writeSensitivity();
+function flushSettings(): void {
+  if (settingsSaveTimer === 0) return;
+  window.clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = 0;
+  writeSettings();
 }
 
-const statsPanel = mountStatsPanel(document.body, {
+const panel = mountPanel(document.body, {
   onExport: () => storage.export(),
   async onImport(code: string): Promise<void> {
     await storage.import(code);
     aggregate = aggregateStats(await storage.getAggregate());
-    statsPanel.setAggregate(aggregate);
+    panel.setAggregate(aggregate);
   },
   onSensitivityChange(sensitivity: number): void {
-    flickSensitivity = clampFlickSensitivity(sensitivity);
+    settings.flickSensitivity = clampFlickSensitivity(sensitivity);
     sensitivityTouched = true;
-    saveSensitivitySoon();
+    saveSettingsSoon();
+  },
+  onManualViewed(): void {
+    // 설명서를 한 번이라도 보면 다음 실행부터 자동으로 띄우지 않는다. 디바운스를 거치지 않고
+    // 즉시 쓴다 — 이 표시가 저장되지 못하면 사용자는 실행할 때마다 설명서를 다시 만난다.
+    if (settings.manualSeen) return;
+    settings.manualSeen = true;
+    writeSettings();
   },
   // 패널 열고 닫기는 히스토리를 거친다 — 안드로이드 백버튼으로 닫히게 하기 위해서다.
   // 훅은 mount 시점이 아니라 클릭 시점에 불리므로 아래에서 채워도 늦지 않는다.
-  onOpenRequest: () => statsHistory.requestOpen(),
-  onCloseRequest: () => statsHistory.requestClose(),
+  onOpenRequest: () => panelHistory.requestOpen(),
+  onCloseRequest: () => panelHistory.requestClose(),
 });
 
-const statsHistory = attachScreenHistory('stats', statsPanel);
+const panelHistory = attachScreenHistory('stats', panel);
 
 // 어느 경로로 저장되고 있는지 DOM 에 남긴다. 실기기에서 "기록이 안 남는다"를 진단할 때,
 // 폴백으로 떨어졌는지(저장소 차단) 저장 자체가 실패했는지를 가르는 유일한 단서다.
@@ -124,7 +128,7 @@ void storage
   .getAggregate()
   .then((stored) => {
     aggregate = aggregateStats(stored);
-    statsPanel.setAggregate(aggregate);
+    panel.setAggregate(aggregate);
   })
   .catch(() => {
     // 읽지 못하면 0 에서 시작한다. 이번 세션의 기록은 계속 쌓이고 저장도 계속 시도한다.
@@ -133,17 +137,28 @@ void storage
 void storage
   .getSettings()
   .then((stored) => {
-    if (sensitivityTouched) return; // 읽어오는 사이에 사용자가 이미 정했다 — 그쪽이 최신이다
-    flickSensitivity = clampFlickSensitivity(stored.flickSensitivity);
-    statsPanel.setSensitivity(flickSensitivity);
+    if (!sensitivityTouched) {
+      // 읽어오는 사이에 사용자가 이미 슬라이더를 움직였다면 그쪽이 최신이다.
+      settings.flickSensitivity = clampFlickSensitivity(stored.flickSensitivity);
+      panel.setSensitivity(settings.flickSensitivity);
+    }
+    // 최초 실행이면 설명서부터 보여준다 (히스토리를 거치므로 백버튼 = 설명서 닫기).
+    // 이 실행 중에 이미 봤다면(저장이 읽히기 전에 사용자가 열어봤다면) 다시 띄우지 않는다.
+    if (!stored.manualSeen && !settings.manualSeen) {
+      panel.setTab('manual');
+      panelHistory.requestOpen();
+    } else {
+      settings.manualSeen = true;
+    }
   })
   .catch(() => {
     // 못 읽으면 기본 배율로 간다. 슬라이더는 이미 기본값에 맞춰져 있다.
+    // 설명서 자동 표시는 저장이 안 되는 환경이라 매번 뜨게 된다 — 띄우지 않는 쪽을 고른다.
   });
 
 function recordSpin(spin: CompletedSpin): void {
   aggregate = mergeSpin(aggregate, spin);
-  statsPanel.setAggregate(aggregate);
+  panel.setAggregate(aggregate);
   void storage.putRecord(newSpinRecord(spin)).catch(() => {});
 }
 
@@ -152,7 +167,9 @@ const input = attachPointerInput(
   () => renderer.layout(),
   {
     onFlick(deltaOmega: number): void {
-      state = applyImpulse(state, deltaOmega);
+      // 민감도는 플릭의 세기(게터로 이미 반영)뿐 아니라 도달 가능한 최고 속도도 정한다.
+      // 상한을 함께 낮추지 않으면 연속 플릭이 항상 OMEGA_MAX 에 붙어 설정 차이가 사라진다.
+      state = applyImpulse(state, deltaOmega, flickOmegaCap(settings.flickSensitivity));
     },
     onDoubleTap(): void {
       state = halt(state);
@@ -164,7 +181,7 @@ const input = attachPointerInput(
       driver.warmUp();
     },
   },
-  () => flickSensitivity,
+  () => settings.flickSensitivity,
 );
 
 // ── 크기 / DPR 동기화 ──────────────────────────────────────────
@@ -290,7 +307,7 @@ document.addEventListener('visibilitychange', () => {
   } else {
     stopLoop();
     input.reset();
-    flushSensitivity();
+    flushSettings();
   }
 });
 

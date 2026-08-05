@@ -1,13 +1,34 @@
 // L3 — Phase 6(플릭 민감도 설정)이 실브라우저에서 끝까지 이어지는지 확인한다.
 //
-// 검증 대상은 셋이다:
+// 검증 대상은 넷이다:
 //   1. 슬라이더 → 다음 플릭의 세기 (조작 경로)
-//   2. 슬라이더 → IndexedDB → 새로고침 후 복원 (저장 경로)
-//   3. v1 DB(records + aggregate)를 쓰던 기존 사용자의 기록이 v2 승격에서 살아남는가 (마이그레이션)
+//   2. 슬라이더 → **도달 가능한 최고 속도** (연속 플릭으로만 드러나는 상한)
+//   3. 슬라이더 → IndexedDB → 새로고침 후 복원 (저장 경로)
+//   4. v1 DB(records + aggregate)를 쓰던 기존 사용자의 기록이 v2 승격에서 살아남는가 (마이그레이션)
 //
-// 3번은 단위 테스트로 대신할 수 없다. onupgradeneeded 가 기존 스토어를 보존하는지는
+// 4번은 단위 테스트로 대신할 수 없다. onupgradeneeded 가 기존 스토어를 보존하는지는
 // IndexedDB 구현이 답하는 것이지 우리 코드가 답하는 것이 아니다 — 실물로 확인해야 한다.
-import { expect, test, type Locator, type Page } from '@playwright/test';
+//
+// 슬라이더는 이제 **설정 탭** 안에 있다. 패널을 여는 것만으로는 닿지 않으므로 openPanel 에
+// 탭을 명시한다 (helpers.ts).
+import { expect, test } from '@playwright/test';
+
+import { flickOmegaCap } from '../../src/core/input-model';
+
+import {
+  closePanel,
+  collectErrors,
+  flick,
+  flickAndMeasure,
+  flickRepeatedlyAndMeasure,
+  gotoFirstRun,
+  halt,
+  openPanel,
+  rowChecksum,
+  sensitivityPercent,
+  setSensitivityPercent,
+  statValue,
+} from './helpers';
 
 /** v1 시절 저장돼 있던 기록. 승격 뒤에도 이 값이 그대로 보여야 한다. */
 const V1_RECORD = {
@@ -20,132 +41,14 @@ const V1_RECORD = {
   schemaVersion: 1,
 } as const;
 
-function collectErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
-  });
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  return errors;
-}
+/** 최소 민감도(25%)에서 플릭으로 도달할 수 있는 최고 각속도 [rad/s]. = OMEGA_MAX × 0.25 = 52.5 */
+const CAP_AT_MIN = flickOmegaCap(0.25);
 
-async function statValue(page: Page, key: string): Promise<number> {
-  const text = await page.locator(`[data-stat="${key}"]`).getAttribute('data-value');
-  return text === null ? Number.NaN : Number(text);
-}
-
-async function openPanel(page: Page): Promise<void> {
-  const panel = page.locator('#stats-panel');
-  if (!(await panel.isVisible())) await page.locator('#stats-toggle').click();
-  await expect(panel).toBeVisible();
-}
-
-async function closePanel(page: Page): Promise<void> {
-  await page.locator('#stats-close').click();
-  await expect(page.locator('#stats-panel')).toBeHidden();
-}
-
-/** 슬라이더를 특정 % 로 옮긴다. 사람이 끄는 것과 같은 input 이벤트를 발생시킨다. */
-async function setSensitivityPercent(page: Page, percent: number): Promise<void> {
-  await page.locator('#stats-sensitivity').evaluate((element, value) => {
-    const slider = element as HTMLInputElement;
-    slider.value = String(value);
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
-  }, percent);
-  await expect(page.locator('#stats-sensitivity-value')).toHaveText(`${String(percent)}%`);
-}
-
-async function sensitivityPercent(page: Page): Promise<number> {
-  return Number(await page.locator('#stats-sensitivity').inputValue());
-}
-
-/** 캔버스 가로 한 줄의 체크섬 (app.spec.ts 와 같은 방식). 회전하면 값이 바뀐다. */
-async function rowChecksum(canvas: Locator, yFraction: number): Promise<number> {
-  return canvas.evaluate((element: HTMLCanvasElement, fraction: number) => {
-    const ctx = element.getContext('2d');
-    if (ctx === null) return -1;
-    const y = Math.floor(element.height * fraction);
-    const { data } = ctx.getImageData(0, y, element.width, 1);
-    let sum = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      sum = (sum * 31 + (data[i] ?? 0) * 7 + (data[i + 1] ?? 0) * 3 + (data[i + 2] ?? 0)) | 0;
-    }
-    return sum;
-  }, yFraction);
-}
-
-/**
- * 스피너를 튕긴다. 스와이프의 모양과 박자는 app.spec / stats.spec 과 같다.
- *
- * 이 박자를 그대로 쓰는 것이 중요하다. 간격을 늘려 "부드럽게" 튕기면 워커가 붐빌 때
- * mouse.move 사이의 실제 간격이 플릭 윈도(100ms)를 넘어서서 Δω 가 0 이 된다
- * (playwright.config.ts 의 workers 주석에 적힌 그 현상이다).
- */
-async function flick(page: Page, canvas: Locator): Promise<void> {
-  const box = await canvas.boundingBox();
-  if (box === null) throw new Error('캔버스의 배치 상자를 얻지 못했다.');
-  const swipeY = box.y + box.height / 2 - box.height * 0.11;
-  const startX = box.x + box.width / 2 - box.width * 0.28;
-
-  await page.mouse.move(startX, swipeY);
-  await page.mouse.down();
-  for (let i = 1; i <= 8; i += 1) {
-    await page.mouse.move(startX + (box.width * 0.56 * i) / 8, swipeY);
-    await page.waitForTimeout(12);
-  }
-  await page.mouse.up();
-}
-
-/**
- * 플릭 직후의 최고 ω [rad/s]. ?debug=1 오버레이의 판독값을 읽는다.
- *
- * 오버레이는 100ms 마다 다시 그리고 ω 는 그 사이에도 감속하므로, 한 번 읽는 대신 잠깐 동안
- * 여러 번 읽어 최댓값을 쓴다. 이 오버레이는 원래 "느낌이 이상하다"를 숫자로 잡으려고 만든
- * 도구다(CLAUDE.md 7장) — 검증용 출구를 새로 뚫는 대신 있는 것을 쓴다.
- */
-async function peakOmega(page: Page): Promise<number> {
-  const readout = page.locator('#debug-overlay');
-  let peak = 0;
-  for (let i = 0; i < 10; i += 1) {
-    const text = (await readout.textContent()) ?? '';
-    const matched = /ω\s+(-?[\d.]+)\s+rad\/s/.exec(text);
-    if (matched !== null) peak = Math.max(peak, Math.abs(Number(matched[1])));
-    await page.waitForTimeout(40);
-  }
-  return peak;
-}
-
-/** 더블탭으로 즉시 정지시킨다 (다음 측정이 이전 회전에 얹히지 않게). */
-async function halt(page: Page, canvas: Locator): Promise<void> {
-  const box = await canvas.boundingBox();
-  if (box === null) throw new Error('캔버스의 배치 상자를 얻지 못했다.');
-  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
-  await page.waitForTimeout(150);
-}
-
-/**
- * 정지 상태에서 한 번 튕기고 그때의 최고 ω 를 잰다. 측정이 끝나면 다시 세워둔다.
- *
- * 스와이프 시뮬레이션은 워커 부하에 따라 이따금 Δω = 0 으로 끝난다 (flick 주석 참조).
- * 그건 앱의 회귀가 아니라 입력 흉내의 실패이므로 다시 튕겨본다 — 세 번 다 0 이면 그때는
- * 진짜로 플릭이 먹지 않는 것이고, 호출부의 단언이 그것을 잡는다.
- */
-async function flickAndMeasure(page: Page, canvas: Locator): Promise<number> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await halt(page, canvas);
-    await flick(page, canvas);
-    const peak = await peakOmega(page);
-    if (peak > 0) return peak;
-  }
-  return 0;
-}
-
-test('민감도 슬라이더가 기록 패널에 있고 기본값은 100% 다', async ({ page }) => {
+test('민감도 슬라이더가 설정 탭에 있고 기본값은 100% 다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
 
-  await openPanel(page);
+  await openPanel(page, 'settings');
 
   const slider = page.locator('#stats-sensitivity');
   await expect(slider).toBeVisible();
@@ -160,8 +63,8 @@ test('민감도 슬라이더가 기록 패널에 있고 기본값은 100% 다', 
 
 test('슬라이더를 키보드로 움직이면 % 표시가 즉시 따라온다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await openPanel(page);
+  await gotoFirstRun(page);
+  await openPanel(page, 'settings');
 
   const slider = page.locator('#stats-sensitivity');
   await slider.focus();
@@ -182,22 +85,20 @@ test('슬라이더를 키보드로 움직이면 % 표시가 즉시 따라온다'
 
 test('민감도를 낮추면 같은 플릭의 회전이 눈에 띄게 느려진다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/?debug=1');
-  const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
+  await gotoFirstRun(page, '/?debug=1');
   await expect(page.locator('#debug-overlay')).toBeVisible();
 
   // 최대 민감도로 한 번
-  await openPanel(page);
+  await openPanel(page, 'settings');
   await setSensitivityPercent(page, 150);
   await closePanel(page);
-  const fast = await flickAndMeasure(page, canvas);
+  const fast = await flickAndMeasure(page);
 
   // 같은 플릭을 최소 민감도로 (같은 페이지·같은 스크립트라 조건이 같다)
-  await openPanel(page);
+  await openPanel(page, 'settings');
   await setSensitivityPercent(page, 25);
   await closePanel(page);
-  const slow = await flickAndMeasure(page, canvas);
+  const slow = await flickAndMeasure(page);
 
   expect(
     fast,
@@ -210,13 +111,66 @@ test('민감도를 낮추면 같은 플릭의 회전이 눈에 띄게 느려진�
   expect(errors).toEqual([]);
 });
 
+test('민감도가 도달 가능한 최고 속도까지 낮춘다 (연속 플릭으로도 상한을 넘지 못한다)', async ({
+  page,
+}) => {
+  // 이 테스트는 플릭 시퀀스를 여러 번 재시도할 수 있다 (아래 flickSequenceUntil). 워커 4개가
+  // 동시에 돌 때는 mouse.move 간격이 늘어나 시퀀스 전체가 약해지는 구간이 있는데, 그 구간은
+  // 다른 워커의 무거운 테스트가 끝나면 지나간다 — 기본 30초 안에는 다 못 기다릴 수 있다.
+  test.setTimeout(150_000);
+  const errors = collectErrors(page);
+  await gotoFirstRun(page, '/?debug=1');
+  await expect(page.locator('#debug-overlay')).toBeVisible();
+
+  // 25%: 상한 52.5 rad/s. 쉬지 않고 열네 번 튕기면 감속을 앞질러 상한까지 밀어올린다.
+  // 횟수에 여유를 둔 이유: 스와이프 흉내는 워커가 붐빌 때 이따금 Δω = 0 으로 끝난다
+  // (helpers.ts 의 flick 주석). 몇 번 헛나가도 누적이 상한에 닿도록 넉넉히 튕긴다 —
+  // 여분의 플릭이 결과를 흔들지는 않는다. 상한 위로는 어차피 올라가지 못하기 때문이다.
+  // 시퀀스 전체가 헛나가는 경우(워커 포화로 mouse.move 간격이 플릭 윈도를 넘는 경우)에는
+  // 시퀀스째 다시 시도한다. 재시도는 "목표 밑"일 때만 하므로 상한 초과(진짜 회귀)를 가리지
+  // 못한다 — 초과한 값은 재시도 없이 그대로 아래 단언에서 걸린다.
+  async function flickSequenceUntil(times: number, atLeast: number): Promise<number> {
+    let peak = 0;
+    for (let attempt = 0; attempt < 5 && peak <= atLeast; attempt += 1) {
+      peak = await flickRepeatedlyAndMeasure(page, times);
+    }
+    return peak;
+  }
+
+  await openPanel(page, 'settings');
+  await setSensitivityPercent(page, 25);
+  await closePanel(page);
+  const capped = await flickSequenceUntil(14, CAP_AT_MIN * 0.7);
+
+  // 100%: 같은 플릭 시퀀스가 그 상한을 훌쩍 넘어선다 — 상한을 만든 것이 감속이 아니라
+  // 설정이라는 증거다. 이 대조가 없으면 위 단언은 "플릭이 원래 약하다"로도 통과한다.
+  await openPanel(page, 'settings');
+  await setSensitivityPercent(page, 100);
+  await closePanel(page);
+  const uncapped = await flickSequenceUntil(14, CAP_AT_MIN * 1.8);
+
+  expect(capped, '최소 민감도에서 회전이 시작되지 않았다').toBeGreaterThan(0);
+  // 상한을 넘지 않는다 (오버레이 판독 시점의 감속·반올림 여유 3%).
+  expect(capped, `25% 에서 ω 가 상한 ${String(CAP_AT_MIN)} rad/s 를 넘었다`).toBeLessThan(
+    CAP_AT_MIN * 1.03,
+  );
+  // 그러면서 상한 **가까이까지는** 올라간다. 이게 없으면 상한이 아무리 낮아도 통과한다.
+  expect(capped, '25% 에서 상한 근처에 닿지 못했다 — 플릭 누적이 부족하다').toBeGreaterThan(
+    CAP_AT_MIN * 0.7,
+  );
+  expect(uncapped, '기본 민감도에서는 같은 시퀀스가 상한을 훌쩍 넘어야 한다').toBeGreaterThan(
+    CAP_AT_MIN * 1.8,
+  );
+
+  expect(errors).toEqual([]);
+});
+
 test('설정한 민감도가 IndexedDB 에 남아 새로고침 뒤에도 유지된다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
   await expect.poll(() => page.locator('html').getAttribute('data-storage')).toBe('indexeddb');
 
-  await openPanel(page);
+  await openPanel(page, 'settings');
   await setSensitivityPercent(page, 40);
 
   // 저장은 디바운스(300ms) 뒤에 일어난다. 그 시간과 트랜잭션 커밋 여유를 준다.
@@ -224,7 +178,7 @@ test('설정한 민감도가 IndexedDB 에 남아 새로고침 뒤에도 유지�
   await page.reload();
   await expect(page.locator('#stage')).toBeVisible();
 
-  await openPanel(page);
+  await openPanel(page, 'settings');
   await expect.poll(() => sensitivityPercent(page)).toBe(40);
   await expect(page.locator('#stats-sensitivity-value')).toHaveText('40%');
 
@@ -244,11 +198,10 @@ test('IndexedDB 가 막혀 있어도 슬라이더는 동작한다 (저장만 안
     });
   });
 
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
   await expect.poll(() => page.locator('html').getAttribute('data-storage')).toBe('memory');
 
-  await openPanel(page);
+  await openPanel(page, 'settings');
   await setSensitivityPercent(page, 65);
   await page.waitForTimeout(700); // 저장 시도가 조용히 실패할 시간
 
@@ -259,18 +212,17 @@ test('IndexedDB 가 막혀 있어도 슬라이더는 동작한다 (저장만 안
 
 test('슬라이더를 끌어도 스피너가 돌지 않는다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
   const canvas = page.locator('#stage');
-  await expect(canvas).toBeVisible();
 
   // 먼저 이 스와이프가 정말 스피너를 돌린다는 것을 확인해둔다. 이게 없으면 아래 단언은
   // "플릭이 원래 안 먹는다"로도 통과해버린다.
-  await flick(page, canvas);
+  await flick(page);
   const spun = await rowChecksum(canvas, 0.35);
   await expect.poll(() => rowChecksum(canvas, 0.35)).not.toBe(spun);
-  await halt(page, canvas);
+  await halt(page);
 
-  await openPanel(page);
+  await openPanel(page, 'settings');
   const box = await page.locator('#stats-sensitivity').boundingBox();
   if (box === null) throw new Error('슬라이더의 배치 상자를 얻지 못했다.');
 
@@ -340,12 +292,13 @@ test('v1 DB 를 쓰던 사용자의 기록이 v2 승격에서 살아남는다', 
 
   await page.unroute('**/main.ts*');
   const errors = collectErrors(page); // 스크립트를 막았던 첫 로드의 잡음은 세지 않는다
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+
+  // v1 사용자에게도 설정 스토어는 이번에 처음 생긴다 — manualSeen 이 없으니 설명서가 뜬다.
+  await gotoFirstRun(page);
   await expect.poll(() => page.locator('html').getAttribute('data-storage')).toBe('indexeddb');
 
   // 기록이 그대로 읽힌다 — 마이그레이션이 스토어를 다시 만들지 않았다는 뜻이다.
-  await openPanel(page);
+  await openPanel(page, 'stats');
   await expect.poll(() => statValue(page, 'bestRpm')).toBe(V1_RECORD.maxRpm);
   expect(await statValue(page, 'sessionCount')).toBe(1);
   expect(await statValue(page, 'bestDurationMs')).toBe(V1_RECORD.durationMs);
@@ -369,12 +322,14 @@ test('v1 DB 를 쓰던 사용자의 기록이 v2 승격에서 살아남는다', 
   expect(schema.stores).toEqual(['aggregate', 'records', 'settings']);
 
   // 새로 생긴 settings 스토어도 정상 동작한다 (기본값 → 변경 → 새로고침 후 유지).
+  await openPanel(page, 'settings');
   expect(await sensitivityPercent(page)).toBe(100);
   await setSensitivityPercent(page, 75);
   await page.waitForTimeout(700);
   await page.reload();
-  await openPanel(page);
+  await openPanel(page, 'settings');
   await expect.poll(() => sensitivityPercent(page)).toBe(75);
+  await openPanel(page, 'stats');
   expect(await statValue(page, 'bestRpm')).toBe(V1_RECORD.maxRpm); // 기록도 여전히 그대로다
 
   expect(errors).toEqual([]);
@@ -382,11 +337,10 @@ test('v1 DB 를 쓰던 사용자의 기록이 v2 승격에서 살아남는다', 
 
 test('저장된 민감도가 없으면 기본 배율로 시작한다 (새 프로필)', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
   await expect.poll(() => page.locator('html').getAttribute('data-storage')).toBe('indexeddb');
 
-  await openPanel(page);
+  await openPanel(page, 'settings');
   // 저장소를 읽고 온 뒤에도 100% 여야 한다 (빈 스토어를 잘못 읽어 0 이나 NaN 이 되지 않는다).
   await page.waitForTimeout(300);
   expect(await sensitivityPercent(page)).toBe(100);

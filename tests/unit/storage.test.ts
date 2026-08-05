@@ -289,8 +289,16 @@ describe('StorageAdapter 계약 (인메모리 백엔드)', () => {
 
 describe('설정 값 검증', () => {
   it('정상 설정은 그대로 통과한다', () => {
-    const settings = { flickSensitivity: 0.75, schemaVersion: 1 } as const;
+    const settings = { flickSensitivity: 0.75, manualSeen: true, schemaVersion: 1 } as const;
     expect(readSettings(settings)).toEqual(settings);
+  });
+
+  it('manualSeen 이 없거나 불리언이 아니면 false 로 읽는다 (필드 추가 전 저장분 호환)', () => {
+    // 설명서가 한 번 더 뜨는 것은 사고가 아니지만, 영영 안 뜨는 것은 사고다 — 애매하면 false.
+    expect(readSettings({ flickSensitivity: 1, schemaVersion: 1 })?.manualSeen).toBe(false);
+    expect(
+      readSettings({ flickSensitivity: 1, manualSeen: 'yes', schemaVersion: 1 })?.manualSeen,
+    ).toBe(false);
   });
 
   it.each([
@@ -332,26 +340,35 @@ describe('SettingsStore 계약 (인메모리 백엔드)', () => {
 
   it('저장한 값이 그대로 돌아온다 (라운드트립)', async () => {
     const storage = createMemoryStorage();
-    await storage.putSettings({ flickSensitivity: 0.45, schemaVersion: 1 });
-    expect(await storage.getSettings()).toEqual({ flickSensitivity: 0.45, schemaVersion: 1 });
+    await storage.putSettings({ flickSensitivity: 0.45, manualSeen: true, schemaVersion: 1 });
+    expect(await storage.getSettings()).toEqual({
+      flickSensitivity: 0.45,
+      manualSeen: true,
+      schemaVersion: 1,
+    });
 
-    await storage.putSettings({ flickSensitivity: 1.25, schemaVersion: 1 });
+    await storage.putSettings({ flickSensitivity: 1.25, manualSeen: false, schemaVersion: 1 });
     expect((await storage.getSettings()).flickSensitivity).toBe(1.25);
+    expect((await storage.getSettings()).manualSeen).toBe(false);
   });
 
   it('폴백 경로에서도 범위 밖 값은 읽을 때 잘린다 (IndexedDB 경로와 같은 지점)', async () => {
     const storage = createMemoryStorage();
-    // 타입을 우회해 손상된 값을 밀어넣는다 — 예전 버전이나 다른 탭이 써넣은 상황이다.
-    await storage.putSettings({ flickSensitivity: 42, schemaVersion: 1 });
+    // 손상된 값을 밀어넣는다 — 예전 버전이나 다른 탭이 써넣은 상황이다.
+    await storage.putSettings({ flickSensitivity: 42, manualSeen: false, schemaVersion: 1 });
     expect((await storage.getSettings()).flickSensitivity).toBe(FLICK_SENSITIVITY_MAX);
 
-    await storage.putSettings({ flickSensitivity: Number.NaN, schemaVersion: 1 });
+    await storage.putSettings({
+      flickSensitivity: Number.NaN,
+      manualSeen: false,
+      schemaVersion: 1,
+    });
     expect(await storage.getSettings()).toEqual(DEFAULT_SETTINGS);
   });
 
   it('설정은 백업 코드에 실리지 않는다 (백업은 기록 전용)', async () => {
     const storage = createMemoryStorage();
-    await storage.putSettings({ flickSensitivity: 0.3, schemaVersion: 1 });
+    await storage.putSettings({ flickSensitivity: 0.3, manualSeen: true, schemaVersion: 1 });
     await storage.putRecord(record(0));
 
     const decoded = decodeBackup(await storage.export());
@@ -365,7 +382,7 @@ describe('SettingsStore 계약 (인메모리 백엔드)', () => {
     const code = await source.export();
 
     const target = createMemoryStorage();
-    await target.putSettings({ flickSensitivity: 0.5, schemaVersion: 1 });
+    await target.putSettings({ flickSensitivity: 0.5, manualSeen: true, schemaVersion: 1 });
     await target.import(code);
 
     expect((await target.getSettings()).flickSensitivity).toBe(0.5);
@@ -374,7 +391,7 @@ describe('SettingsStore 계약 (인메모리 백엔드)', () => {
 
   it('clear 는 기록만 지우고 설정은 남긴다', async () => {
     const storage = createMemoryStorage();
-    await storage.putSettings({ flickSensitivity: 1.5, schemaVersion: 1 });
+    await storage.putSettings({ flickSensitivity: 1.5, manualSeen: true, schemaVersion: 1 });
     await storage.putRecord(record(0));
     await storage.clear();
 

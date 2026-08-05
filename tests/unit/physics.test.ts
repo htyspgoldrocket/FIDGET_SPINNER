@@ -415,6 +415,62 @@ describe('상태 조작 헬퍼', () => {
     expect(applyImpulse(state, Number.POSITIVE_INFINITY).omega).toBe(10);
   });
 
+  it('applyImpulse 의 상한 인자를 생략하면 예전 동작과 완전히 같다 (회귀)', () => {
+    // 3번째 인자가 생기기 전의 결과는 "clampOmega(ω + Δ)" 였다. 그대로여야 한다.
+    for (const omega of [0, 3.5, -3.5, 120, -120, OMEGA_MAX, -OMEGA_MAX]) {
+      for (const delta of [0, 7, -7, 500, -500]) {
+        const state = createSpinState(omega);
+        expect(Object.is(applyImpulse(state, delta).omega, clampOmega(omega + delta))).toBe(true);
+        expect(applyImpulse(state, delta).omega).toBe(applyImpulse(state, delta, OMEGA_MAX).omega);
+      }
+    }
+  });
+
+  it('상한 인자가 도달 가능한 최고 속도를 정한다 (양·음 대칭)', () => {
+    const cap = OMEGA_MAX * 0.25; // 52.5
+    expect(applyImpulse(createSpinState(0), 100, cap).omega).toBe(cap);
+    expect(applyImpulse(createSpinState(0), -100, cap).omega).toBe(-cap);
+  });
+
+  it('상한에 닿은 뒤 같은 방향으로 더 튕겨도 빨라지지 않는다 (연속 플릭 포화)', () => {
+    const cap = OMEGA_MAX * 0.25;
+    let state = createSpinState(0);
+    for (let i = 0; i < 10; i += 1) state = applyImpulse(state, 40, cap);
+    expect(state.omega).toBe(cap);
+
+    for (let i = 0; i < 20; i += 1) state = applyImpulse(state, -40, cap);
+    expect(state.omega).toBe(-cap);
+  });
+
+  it('상한보다 이미 빠르면 플릭이 스피너를 느리게 만들지 않는다', () => {
+    // 회전 중에 민감도를 낮춘 상황. 미는 동작이 브레이크가 되면 안 된다.
+    const cap = OMEGA_MAX * 0.25;
+    const fast = createSpinState(100);
+    expect(applyImpulse(fast, 50, cap).omega).toBe(100);
+    expect(applyImpulse(fast, 0, cap).omega).toBe(100);
+    expect(applyImpulse(createSpinState(-100), -50, cap).omega).toBe(-100);
+
+    // 반대 방향 입력으로 줄이는 것은 여전히 가능하다.
+    expect(applyImpulse(fast, -60, cap).omega).toBe(40);
+  });
+
+  it('오염된 상한 값은 OMEGA_MAX 로 되돌아간다', () => {
+    const state = createSpinState(0);
+    for (const bad of [Number.NaN, 0, -5, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(applyImpulse(state, 1e6, bad).omega).toBe(OMEGA_MAX);
+      expect(applyImpulse(state, -1e6, bad).omega).toBe(-OMEGA_MAX);
+    }
+    // OMEGA_MAX 를 넘는 상한도 물리 상한 위로는 못 올라간다.
+    expect(applyImpulse(state, 1e6, OMEGA_MAX * 10).omega).toBe(OMEGA_MAX);
+  });
+
+  it('상한 집행이 -0 을 흘리지 않는다', () => {
+    const cap = OMEGA_MAX * 0.25;
+    expect(Object.is(applyImpulse(createSpinState(-5), 5, cap).omega, -0)).toBe(false);
+    expect(Object.is(applyImpulse(createSpinState(0), -0, cap).omega, -0)).toBe(false);
+    expect(Object.is(applyImpulse(createSpinState(0), -0).omega, -0)).toBe(false);
+  });
+
   it('halt 는 즉시 멈추되 누적 θ 는 보존한다 (기록이 사라지면 안 된다)', () => {
     const state: SpinState = { theta: 987.65, omega: -180, accumulator: 0.002 };
     const stopped = halt(state);

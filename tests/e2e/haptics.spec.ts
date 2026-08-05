@@ -8,6 +8,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { MIN_PULSE_GAP_MS, PULSE_MS_FAST } from '../../src/core/constants';
 
+import { collectErrors, flick, gotoFirstRun } from './helpers';
+
 interface VibrateCall {
   readonly t: number;
   readonly ms: number;
@@ -17,16 +19,6 @@ declare global {
   interface Window {
     __vibrateLog?: VibrateCall[];
   }
-}
-
-/** 콘솔 error 와 잡히지 않은 예외를 모아둔다. */
-function collectErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
-  });
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  return errors;
 }
 
 /** 앱 스크립트보다 먼저 navigator.vibrate 를 감싸 호출 시각·길이를 기록한다. */
@@ -55,29 +47,14 @@ async function removeVibrate(page: Page): Promise<void> {
   });
 }
 
-/** 스피너 중심 위쪽을 가로지르는 접선 스와이프. app.spec.ts 의 플릭과 같은 방식이다. */
-async function flick(page: Page): Promise<void> {
-  const box = await page.locator('#stage').boundingBox();
-  if (box === null) throw new Error('캔버스의 배치 상자를 얻지 못했다.');
-
-  const swipeY = box.y + box.height / 2 - box.height * 0.11;
-  const startX = box.x + box.width / 2 - box.width * 0.28;
-  await page.mouse.move(startX, swipeY);
-  await page.mouse.down();
-  for (let i = 1; i <= 8; i += 1) {
-    await page.mouse.move(startX + (box.width * 0.56 * i) / 8, swipeY);
-    await page.waitForTimeout(12);
-  }
-  await page.mouse.up();
-}
-
 test('플릭하면 진동이 발사되고, 호출 간격이 MIN_PULSE_GAP_MS 밑으로 내려가지 않는다', async ({
   page,
 }) => {
   const errors = collectErrors(page);
   await instrumentVibrate(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  // 설명서를 닫는 것은 캔버스 제스처가 아니라 웜업 펄스도 나가지 않는다 — 첫 진동은
+  // 아래 플릭에서 처음 발사되고, 그래서 log[0] 이 여전히 웜업 펄스다.
+  await gotoFirstRun(page);
 
   await flick(page);
 
@@ -111,8 +88,7 @@ test('플릭하면 진동이 발사되고, 호출 간격이 MIN_PULSE_GAP_MS 밑
 test('탭이 숨겨지면 즉시 vibrate(0) 이 나간다', async ({ page }) => {
   const errors = collectErrors(page);
   await instrumentVibrate(page);
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
 
   await flick(page);
   await expect
@@ -137,7 +113,7 @@ test('탭이 숨겨지면 즉시 vibrate(0) 이 나간다', async ({ page }) => 
 test('진동 미지원 브라우저에서는 안내 배너가 뜨고 닫을 수 있다', async ({ page }) => {
   const errors = collectErrors(page);
   await removeVibrate(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
 
   const notice = page.locator('#haptic-notice');
   await expect(notice).toBeVisible();
@@ -157,16 +133,16 @@ test('진동 미지원 브라우저에서는 안내 배너가 뜨고 닫을 수 
 });
 
 test('진동을 지원하면 안내 배너가 뜨지 않는다', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('#stage')).toBeVisible();
+  await gotoFirstRun(page);
   await expect(page.locator('#haptic-notice')).toHaveCount(0);
 });
 
 test('?debug=1 오버레이가 ω·펄스·프레임 통계를 표시한다', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/');
+  await gotoFirstRun(page);
   await expect(page.locator('#debug-overlay')).toHaveCount(0); // 기본값에서는 없다
 
+  // 두 번째 방문이라 설명서는 다시 뜨지 않는다 (gotoFirstRun 이 manualSeen 저장까지 기다렸다).
   await page.goto('/?debug=1');
   const overlay = page.locator('#debug-overlay');
   await expect(overlay).toBeVisible();

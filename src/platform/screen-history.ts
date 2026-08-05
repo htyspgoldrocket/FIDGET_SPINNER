@@ -8,13 +8,13 @@
 // 앱을 나가려고 백버튼을 두 번 눌러야 하고, 그건 Play Store 리뷰에서 그대로 지적되는 종류의
 // 버그다. 그래서 엔트리는 화면을 **열 때만** 생기고 닫으면 반드시 사라진다.
 //
-// 이 파일은 stats-panel.ts 를 건드리지 않는다. 패널이 미리 뽑아둔 onOpenRequest / onCloseRequest
+// 이 파일은 ui/panel.ts 를 건드리지 않는다. 패널이 미리 뽑아둔 onOpenRequest / onCloseRequest
 // 훅에 requestOpen / requestClose 를 꽂는 것으로 연결이 끝난다.
 
 /** 히스토리 엔트리에 남기는 표식. 다른 상태와 섞이지 않도록 키를 하나만 쓴다. */
 const STATE_KEY = 'screen';
 
-/** 열고 닫을 수 있는 화면. StatsPanel 이 그대로 만족한다. */
+/** 열고 닫을 수 있는 화면. ui 의 Panel 이 그대로 만족한다. */
 export interface HistoryScreen {
   isOpen(): boolean;
   open(): void;

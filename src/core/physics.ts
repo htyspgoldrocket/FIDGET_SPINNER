@@ -138,10 +138,31 @@ export function advance(state: SpinState, frameDt: number, isBraking: boolean): 
 /**
  * 플릭 등으로 각속도를 더한다. 결과는 OMEGA_MAX 로 클램프된다.
  * accumulator 는 건드리지 않는다 — 입력은 시간 진행과 무관하다.
+ *
+ * `maxOmega` 는 **이번 입력이 도달시킬 수 있는 상한** [rad/s] 이다 (민감도 설정이 정한다).
+ * 생략하면 OMEGA_MAX 라 기존 호출부의 동작은 그대로다. 유한하지 않거나 0 이하인 값은
+ * 설정이 오염된 것으로 보고 OMEGA_MAX 로 되돌리며, OMEGA_MAX 보다 큰 값은 잘라낸다.
+ *
+ * **이미 상한보다 빠르면 그 속도를 그대로 둔다.** 회전 중에 민감도를 낮췄을 때 다음 플릭이
+ * 스피너를 오히려 느리게 만들면, 미는 동작이 브레이크가 되어버린다. 입력은 상한 쪽으로
+ * 밀어올리기만 하고 끌어내리지는 않는다 — 감속은 마찰과 브레이크의 몫이다.
  */
-export function applyImpulse(state: SpinState, deltaOmega: number): SpinState {
+export function applyImpulse(
+  state: SpinState,
+  deltaOmega: number,
+  maxOmega: number = OMEGA_MAX,
+): SpinState {
   const delta = Number.isFinite(deltaOmega) ? deltaOmega : 0;
-  return { ...state, omega: clampOmega(state.omega + delta) };
+  const next = clampOmega(state.omega + delta);
+
+  const cap = Number.isFinite(maxOmega) && maxOmega > 0 ? Math.min(maxOmega, OMEGA_MAX) : OMEGA_MAX;
+  const allowed = Math.max(cap, Math.min(Math.abs(state.omega), OMEGA_MAX));
+
+  // 상한 안이면 후보값을 그대로 쓴다. 밖이면 부호만 유지한 채 크기를 상한에 붙인다.
+  // (allowed > 0 이 보장되므로 이 가지에서 next 는 0 이 아니고, -0 이 만들어지지 않는다.)
+  const omega = Math.abs(next) > allowed ? Math.sign(next) * allowed : next;
+
+  return { ...state, omega };
 }
 
 /** 더블탭 즉시 정지. θ 는 유지한다 (누적 회전수는 기록으로 남아야 한다). */

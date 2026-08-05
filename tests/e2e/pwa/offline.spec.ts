@@ -7,14 +7,7 @@
 // 못한 상태와 구별되지 않는다. 실제로 네트워크를 끊고 새로 띄워 **스피너가 그려지는지**까지 본다.
 import { expect, test, type Page } from '@playwright/test';
 
-function collectErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
-  });
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  return errors;
-}
+import { collectErrors, dismissFirstRunManual } from '../helpers';
 
 /**
  * 서비스 워커가 이 페이지를 **제어**할 때까지 기다린다.
@@ -47,6 +40,7 @@ test('서비스 워커가 앱 셸과 아이콘을 프리캐시한다', async ({ 
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForServiceWorkerControl(page);
+  await dismissFirstRunManual(page);
 
   const cached = await page.evaluate(async () => {
     const names = await caches.keys();
@@ -76,6 +70,7 @@ test('네트워크를 끊고 새로고침해도 앱이 그대로 뜬다', async 
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForServiceWorkerControl(page);
+  await dismissFirstRunManual(page);
 
   await context.setOffline(true);
   expect(await page.evaluate(() => navigator.onLine)).toBe(false);
@@ -95,6 +90,7 @@ test('오프라인에서 처음 여는 주소(쿼리 포함)도 앱 셸로 받�
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForServiceWorkerControl(page);
+  await dismissFirstRunManual(page);
 
   await context.setOffline(true);
 
@@ -112,6 +108,7 @@ test('오프라인에서 처음 여는 주소(쿼리 포함)도 앱 셸로 받�
 test('오프라인에서도 매니페스트와 아이콘을 받을 수 있다', async ({ page, context }) => {
   await page.goto('/');
   await waitForServiceWorkerControl(page);
+  await dismissFirstRunManual(page);
 
   await context.setOffline(true);
 
