@@ -98,6 +98,11 @@
 - 기존 goldrocket.vercel.app 은 병행 유지 (방법 2 — 안전한 이행). **TWA 는 새 도메인에 묶는다**
 - Vercel CLI 재설치됨 (기존 인증 htyspgoldrocket 유효)
 
+**추가 (같은 날) — 프로젝트 리네임**
+- 사용자 결정(옛 주소 기록 폐기 승인)으로 Vercel 프로젝트명 `goldrocket` → **`goldrocket-fidget-spinner`** 리네임 (projectId 불변, API PATCH). 기본 주소 = TWA 도메인으로 일원화
+- 리네임 후 원격 검증: 새 주소에서 앱 셸/번들/sw.js/manifest/아이콘 3종 전부 200. `.well-known/assetlinks.json` 은 아직 404 (예정대로 미배치)
+- 로컬 `.vercel/project.json` 의 projectName 갱신. 옛 goldrocket.vercel.app 은 당분간 응답하나 보장 없음
+
 **다음 할 일**
 - 사용자: Google Play 개발자 계정 등록 ($25)
 - Bubblewrap 으로 TWA AAB 빌드 → keystore 생성·백업 절차 → assetlinks.json (서명 SHA-256 확보 후) 배치
