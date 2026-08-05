@@ -11,7 +11,7 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-05 |
-| 현재 단계 | **Phase 6 진행 중 — 민감도 실효화(속도 상한 스케일) + 탭 UI(기록/설정/설명서) + 최초 설명서 배포 완료, 실기기 확인 대기** |
+| 현재 단계 | **Phase 6 완료 (사용자 선언, 2026-08-05) → Phase 7 (Play Store) 준비 시작** |
 | 마지막 커밋 | main `ca71cc6` (PR#5 머지) = develop `1a0f719` |
 | CI 상태 | main green (ca71cc6: L0-L2/L3/L4 전부 success) · develop green |
 | 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
@@ -71,13 +71,13 @@
 - [x] 성능 예산 게이트 (번들 60KB + Lighthouse CI assert, Perf 100 실측)
 - [x] Vercel 배포 + 자동 배포 연결 — https://goldrocket.vercel.app (프로덕션 배포·검증 완료, git 연결 수정으로 자동 배포 활성)
 
-### Phase 6 — 실기기 튜닝
-- [ ] `docs/DEVICE_CHECKLIST.md` 작성
-- [ ] 실제 안드로이드 기기 촉감 검증 (1차 피드백: "터치가 지나치게 민감" → 민감도 설정으로 대응)
-- [x] 플릭 민감도 사용자 설정 (25~150%, IndexedDB 저장, 설정 탭 슬라이더)
-- [x] 민감도 실효화: 도달 가능한 최고 속도까지 함께 스케일 (ADR-008, 2차 피드백 "바꿔도 움직임이 똑같다" 대응)
+### Phase 6 — 실기기 튜닝 (2026-08-05 사용자 완료 선언)
+- [x] 실제 안드로이드 기기 검증 3회 왕복 (민감도 민감 → 설정 추가 → 실효화 → 터치 드래그 수정, 전부 배포·실기기 확인)
+- [x] 플릭 민감도 사용자 설정 (25~150%, IndexedDB 저장, 설정 탭 슬라이더 + 터치 드래그 직접 처리)
+- [x] 민감도 실효화: 도달 가능한 최고 속도까지 함께 스케일 (ADR-008)
 - [x] 패널 탭 3분할 (기록/설정/설명서) + 최초 실행 설명서 자동 표시 (manualSeen 영속)
-- [ ] 물리·햅틱 상수 튜닝 (변경 시 골든 스냅샷 갱신 + 사유 기록) — 사용자가 민감도 적정값을 찾으면 기본값 반영 검토
+- [~] "완벽하지는 않다"(사용자) 상태로 종료 — 잔여 다듬기(민감도 기본값 확정, 물리·햅틱 상수 튜닝)는 Phase 7 이후 필요 시 재개
+- [보류] `docs/DEVICE_CHECKLIST.md` 작성 — Phase 7 진행 중 병행 가능
 
 ### Phase 7 — Play Store (옵션, 별도 판단)
 - [ ] 도메인 확정 + `assetlinks.json`
@@ -113,10 +113,15 @@
 - PR#5 (터치 드래그 수정) 사용자 웹 머지, main CI 전부 green (ca71cc6)
 - 프로덕션 반영 원격 확인: 새 번들 index-B6uGxz42.js 서빙 중, 터치 드래그 코드(setPointerCapture) 포함 확인
 
-**다음 할 일**
-- 실기기에서 슬라이더 손가락 드래그 재확인
-- 민감도 적정값 확정 → 기본값 반영 검토
-- docs/DEVICE_CHECKLIST.md 작성
+**Phase 6 종료 (같은 날)**
+- 실기기 확인 (사용자): 민감도 체감 ✅ · 설명서 ✅ · 슬라이더 드래그 — "완벽하지는 않지만" 동작 확인, **이 상태로 개발 완료 선언**
+- 잔여 다듬기(민감도 기본값 확정, 상수 튜닝, DEVICE_CHECKLIST)는 보류. 다음 단계는 **Phase 7 — Play Store 배포 준비**
+
+**다음 할 일 (Phase 7 시작점 — CLAUDE.md 8장 참조)**
+1. 도메인 확정 (현재 goldrocket.vercel.app — TWA는 이 도메인 그대로도 가능하나 커스텀 도메인이면 지금 결정) + `/.well-known/assetlinks.json` 배치
+2. Bubblewrap 으로 TWA AAB 빌드 (패키지명 `kr.goldrocket.fidgetspinner` 고정)
+3. Play App Signing 등록 + keystore 백업 절차 수립 (분실 = 영구 업데이트 불가)
+4. Google Play 개발자 계정 등록 (사용자, $25 1회) → 비공개 테스트 (개인 계정은 12명 × 14일 요건)
 
 **막힌 지점 / 결정 대기**
 - 없음
