@@ -14,3 +14,10 @@ CLAUDE.md
 PROGRESS.md
 DECISIONS.md
 .claude/
+
+# TWA 안드로이드 프로젝트: bubblewrap 이 생성·관리한다 (twa-manifest.json 의 포맷 포함).
+# 우리 손으로 고치는 파일이 아니므로 포맷 게이트의 대상이 아니다.
+twa/
+
+# 릴리즈 절차 문서도 위 헌법 문서들과 같은 한국어 산문이다.
+docs/
