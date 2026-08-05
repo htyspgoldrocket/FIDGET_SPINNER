@@ -11,9 +11,9 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-05 |
-| 현재 단계 | **Phase 6 진행 중 — 민감도 실효화(속도 상한 스케일) + 탭 UI(기록/설정/설명서) + 최초 설명서, 실기기 확인 대기** |
-| 마지막 커밋 | develop (세션 #10 커밋) — main 은 PR#3 머지(`604cf58`) 시점 |
-| CI 상태 | main green (604cf58) · develop push 후 확인 |
+| 현재 단계 | **Phase 6 진행 중 — 민감도 실효화(속도 상한 스케일) + 탭 UI(기록/설정/설명서) + 최초 설명서 배포 완료, 실기기 확인 대기** |
+| 마지막 커밋 | main `c77cfcf` (PR#4 머지) = develop `cd67224` |
+| CI 상태 | main green (c77cfcf: L0-L2/L3/L4 전부 success) · develop green |
 | 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
 | 블로커 | 없음 |
 
@@ -99,8 +99,18 @@
 - 시각 베이스라인: stats-panel/spinner-idle 갱신 (탭 바·토글 문구 — 스피너 렌더링 무변경 확인), settings-panel/manual-panel 신규 2장
 - 단위 241개(+12) / e2e 49개(+12) green (상한 실측 e2e는 워커 포화 플레이크 방어용 시퀀스 재시도 포함). 번들 13.1KB gzip (예산 60KB)
 
+**배포 (같은 날)**
+- PR#4 (develop → main) 사용자 웹 머지, main CI 전부 green (c77cfcf)
+- 프로덕션 반영 원격 확인: goldrocket.vercel.app 이 새 번들(index-BJ0gI8z8.js, 로컬 빌드와 해시 일치) 서빙 중 — manualSeen/설명서 마커 확인. 실기기는 재방문 시 자동 새로고침(세션 #9의 controllerchange)으로 갱신됨
+
+**실기기 확인 + 후속 수정 (같은 날)**
+- 실기기 확인 결과 (사용자): 민감도 체감 ✅ · 설명서 최초 1회 표시 ✅ · **슬라이더 손가락 드래그 ❌**
+- 원인: input[type=range] 네이티브 터치 드래그가 전역 touch-action:none 아래에서 실기기 Android Chrome 은 pan-y 우회로도 안 끌림 (세션 #9의 관찰 항목이 실기기에서 확정)
+- 수정: 패널이 터치/펜 포인터 이벤트를 직접 값으로 변환 (pointerdown/move 캡처, step 스냅, 마우스·키보드는 네이티브 유지). 슬라이더 touch-action 은 none 으로 — 브라우저 제스처 판정 개입 자체를 차단
+- e2e +1 (합성 touch PointerEvent 로 커스텀 드래그 경로 검증). '슬라이더를 끌어도 스피너가 돌지 않는다'의 사전 확인 플릭에 재시도 추가 (워커 경합 플레이크). e2e 50개 × 2회 연속 green
+
 **다음 할 일**
-- 실기기에서 확인: ① 민감도 변경이 확실히 체감되는지 (25%↔100% 최고 속도 4배 차) ② 설명서 최초 1회 표시·백버튼 닫기 ③ 슬라이더 손가락 드래그 (여전히 자동 테스트 불가 항목)
+- 슬라이더 터치 드래그 수정 배포(PR) 후 실기기 재확인
 - 민감도 적정값 확정 → 기본값 반영 검토
 - docs/DEVICE_CHECKLIST.md 작성
 

@@ -464,10 +464,10 @@ export function mountPanel(host: HTMLElement, handlers: PanelHandlers): Panel {
     minWidth: '0',
     height: '34px', // 손가락으로 잡을 수 있는 최소 높이. 트랙은 얇아도 히트 영역은 넓어야 한다.
     accentColor: COLOR_ACCENT,
-    // html/body 가 touch-action:none 이라 터치 드래그가 슬라이더까지 오지 않는다. 여기서만
-    // 세로 팬을 허용해두면(= 가로는 여전히 브라우저가 안 가져간다) 가로 드래그가 슬라이더 몫이 되고,
-    // 패널이 길어져 세로로 넘칠 때 슬라이더 위에서 시작한 스크롤도 그대로 먹는다.
-    touchAction: 'pan-y',
+    // 터치 드래그는 아래에서 포인터 이벤트로 직접 처리한다. none 으로 두어 브라우저가
+    // 팬/스크롤 판정으로 제스처를 가져가지(pointercancel) 못하게 한다. 대가는 "슬라이더 위에서
+    // 시작한 패널 스크롤"인데, 끌리지 않는 슬라이더보다는 스크롤 시작점을 옮기는 쪽이 낫다.
+    touchAction: 'none',
     cursor: 'pointer',
   });
 
@@ -683,6 +683,57 @@ export function mountPanel(host: HTMLElement, handlers: PanelHandlers): Panel {
     handlers.onSensitivityChange(sensitivity);
   }
 
+  // ── 슬라이더 터치 드래그 (실기기 경로) ──────────────────────
+  // input[type=range] 의 네이티브 터치 드래그는 전역 touch-action:none 아래에서 기기별로
+  // 동작이 갈린다 — Android Chrome 실기기에서 pan-y 우회로도 끌리지 않는 것이 확인됐다
+  // (PROGRESS 세션 #10). 브라우저의 제스처 판정에 기대지 않고 터치/펜 포인터를 직접 값으로
+  // 바꾼다. 마우스와 키보드는 네이티브가 잘 동작하므로 건드리지 않는다.
+
+  const SLIDER_MIN_PERCENT = toPercent(FLICK_SENSITIVITY_MIN);
+  const SLIDER_MAX_PERCENT = toPercent(FLICK_SENSITIVITY_MAX);
+
+  /** 지금 슬라이더를 끌고 있는 터치/펜 포인터. 없으면 null. */
+  let sliderDragPointer: number | null = null;
+
+  /** 포인터의 가로 위치 → 눈금(step)에 스냅한 %. 트랙 밖은 경계로 붙인다. */
+  function percentFromPointer(event: PointerEvent): number {
+    const rect = sensitivitySlider.getBoundingClientRect();
+    if (!(rect.width > 0)) return SLIDER_MIN_PERCENT;
+    const frac = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const raw = SLIDER_MIN_PERCENT + frac * (SLIDER_MAX_PERCENT - SLIDER_MIN_PERCENT);
+    const snapped = Math.round(raw / SENSITIVITY_STEP_PERCENT) * SENSITIVITY_STEP_PERCENT;
+    return Math.min(SLIDER_MAX_PERCENT, Math.max(SLIDER_MIN_PERCENT, snapped));
+  }
+
+  function applyPointerPercent(event: PointerEvent): void {
+    const percent = String(percentFromPointer(event));
+    if (percent === sensitivitySlider.value) return; // 같은 눈금이면 input 훅을 다시 부르지 않는다
+    sensitivitySlider.value = percent;
+    onSensitivityInput();
+  }
+
+  function onSliderPointerDown(event: PointerEvent): void {
+    if (event.pointerType === 'mouse') return; // 마우스는 네이티브 드래그가 처리한다
+    event.preventDefault(); // 네이티브 처리와의 이중 반응·포커스 이동을 막는다
+    sliderDragPointer = event.pointerId;
+    try {
+      sensitivitySlider.setPointerCapture(event.pointerId);
+    } catch {
+      // 합성 이벤트(테스트)나 이미 사라진 포인터는 캡처가 안 될 수 있다 — 없어도 동작한다.
+    }
+    applyPointerPercent(event);
+  }
+
+  function onSliderPointerMove(event: PointerEvent): void {
+    if (event.pointerId !== sliderDragPointer) return;
+    applyPointerPercent(event);
+  }
+
+  function onSliderPointerEnd(event: PointerEvent): void {
+    if (event.pointerId !== sliderDragPointer) return;
+    sliderDragPointer = null;
+  }
+
   function onImportClick(): void {
     const code = importCode.value;
     if (code.trim() === '') {
@@ -717,6 +768,10 @@ export function mountPanel(host: HTMLElement, handlers: PanelHandlers): Panel {
   copyButton.addEventListener('click', onCopyClick);
   importButton.addEventListener('click', onImportClick);
   sensitivitySlider.addEventListener('input', onSensitivityInput);
+  sensitivitySlider.addEventListener('pointerdown', onSliderPointerDown);
+  sensitivitySlider.addEventListener('pointermove', onSliderPointerMove);
+  sensitivitySlider.addEventListener('pointerup', onSliderPointerEnd);
+  sensitivitySlider.addEventListener('pointercancel', onSliderPointerEnd);
 
   const panel: Panel = {
     open,
@@ -749,6 +804,10 @@ export function mountPanel(host: HTMLElement, handlers: PanelHandlers): Panel {
       copyButton.removeEventListener('click', onCopyClick);
       importButton.removeEventListener('click', onImportClick);
       sensitivitySlider.removeEventListener('input', onSensitivityInput);
+      sensitivitySlider.removeEventListener('pointerdown', onSliderPointerDown);
+      sensitivitySlider.removeEventListener('pointermove', onSliderPointerMove);
+      sensitivitySlider.removeEventListener('pointerup', onSliderPointerEnd);
+      sensitivitySlider.removeEventListener('pointercancel', onSliderPointerEnd);
       root.remove();
     },
   };
