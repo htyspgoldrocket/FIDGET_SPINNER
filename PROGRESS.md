@@ -12,8 +12,8 @@
 |---|---|
 | 마지막 갱신 | 2026-08-05 |
 | 현재 단계 | **Phase 6 완료 (사용자 선언, 2026-08-05) → Phase 7 (Play Store) 준비 시작** |
-| 마지막 커밋 | main `ca71cc6` (PR#5 머지) = develop `1a0f719` |
-| CI 상태 | main green (ca71cc6: L0-L2/L3/L4 전부 success) · develop green |
+| 마지막 커밋 | main `3c2987a` (PR#6 머지) = develop `dfd9e2d` |
+| CI 상태 | main·develop 전부 green |
 | 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
 | 블로커 | 없음 |
 
@@ -111,10 +111,17 @@
 - assetlinks.json 을 public/.well-known/ 에 배치 (업로드 키 지문), dist 포함 확인. verify green
 - docs/RELEASE.md 신설 — 빌드 재현 절차 / 키 백업 규칙 / Play 제출 순서 / assetlinks 갱신 절차
 
-**다음 할 일**
-- 사용자: ① keystore + 비밀번호 파일 백업 (리포 밖 2곳) ② PR 머지 (assetlinks 배포) ③ Play 개발자 계정 등록 → AAB 업로드
-- 업로드 후: Play 앱 서명 키 SHA-256 을 assetlinks 에 추가 배포 (RELEASE.md 절차)
-- 실기기 기록 이사 (옛 주소 → 새 주소, 백업 코드) — 필요 시
+**세션 종료 (같은 날) — PR#6 머지·배포 확인**
+- PR#6 (TWA 패키징 + prettier 게이트 수정) 사용자 머지, main CI green (3c2987a)
+- **assetlinks.json 프로덕션 배포 확인**: https://goldrocket-fidget-spinner.vercel.app/.well-known/assetlinks.json 200, 패키지명·업로드 키 지문 포함
+- 여기서 오늘 작업 종료 (사용자 선언)
+
+**다음 세션 시작점**
+- 사용자 확인: keystore 백업(리포 밖 2곳) 했는지 물어볼 것 — 아직이면 최우선
+- 사용자: Play 개발자 계정 등록 ($25) → 앱 만들기 → `twa/app-release-bundle.aab` 업로드 (docs/RELEASE.md 순서)
+- 업로드 후: Play Console 앱 무결성의 **앱 서명 키 SHA-256** 을 assetlinks 에 **추가**(교체 아님) → main 머지 배포
+- 선택: `twa/app-release-signed.apk` 를 실기기에 직접 설치해 TWA 동작(주소창 없는 전체화면) 미리 확인 가능
+- 선택: 실기기 기록 이사 (옛 주소 → 새 주소, 백업 코드)
 
 **막힌 지점 / 결정 대기**
 - 없음
