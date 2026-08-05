@@ -12,8 +12,8 @@
 |---|---|
 | 마지막 갱신 | 2026-08-05 |
 | 현재 단계 | **Phase 6 진행 중 — 민감도 실효화(속도 상한 스케일) + 탭 UI(기록/설정/설명서) + 최초 설명서 배포 완료, 실기기 확인 대기** |
-| 마지막 커밋 | main `c77cfcf` (PR#4 머지) = develop `cd67224` |
-| CI 상태 | main green (c77cfcf: L0-L2/L3/L4 전부 success) · develop green |
+| 마지막 커밋 | main `ca71cc6` (PR#5 머지) = develop `1a0f719` |
+| CI 상태 | main green (ca71cc6: L0-L2/L3/L4 전부 success) · develop green |
 | 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
 | 블로커 | 없음 |
 
@@ -109,8 +109,12 @@
 - 수정: 패널이 터치/펜 포인터 이벤트를 직접 값으로 변환 (pointerdown/move 캡처, step 스냅, 마우스·키보드는 네이티브 유지). 슬라이더 touch-action 은 none 으로 — 브라우저 제스처 판정 개입 자체를 차단
 - e2e +1 (합성 touch PointerEvent 로 커스텀 드래그 경로 검증). '슬라이더를 끌어도 스피너가 돌지 않는다'의 사전 확인 플릭에 재시도 추가 (워커 경합 플레이크). e2e 50개 × 2회 연속 green
 
+**2차 배포 (같은 날)**
+- PR#5 (터치 드래그 수정) 사용자 웹 머지, main CI 전부 green (ca71cc6)
+- 프로덕션 반영 원격 확인: 새 번들 index-B6uGxz42.js 서빙 중, 터치 드래그 코드(setPointerCapture) 포함 확인
+
 **다음 할 일**
-- 슬라이더 터치 드래그 수정 배포(PR) 후 실기기 재확인
+- 실기기에서 슬라이더 손가락 드래그 재확인
 - 민감도 적정값 확정 → 기본값 반영 검토
 - docs/DEVICE_CHECKLIST.md 작성
 
