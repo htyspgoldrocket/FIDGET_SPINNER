@@ -83,7 +83,7 @@
 - [x] 도메인 확정: **https://goldrocket-fidget-spinner.vercel.app** (프로젝트 리네임으로 기본 주소화)
 - [x] Bubblewrap AAB 빌드 — `twa/app-release-bundle.aab` (서명·검증 완료) + 테스트용 `app-release-signed.apk`. 빌드 절차·환경 우회 3종은 docs/RELEASE.md
 - [x] `assetlinks.json` 배치 (업로드 키 지문. **Play 등록 후 앱 서명 키 지문 추가 필요** — RELEASE.md) — main 머지 시 배포됨
-- [x] keystore 생성 + 백업 절차 문서화 (docs/RELEASE.md — **사용자 백업 실행 확인 필요**)
+- [x] keystore 생성 + 백업 절차 문서화 (docs/RELEASE.md) — **사용자 백업 완료 확인 (2026-08-05)**
 - [ ] 개발자 계정 등록 ($25, 사용자) → AAB 업로드 → 앱 서명 키 지문 assetlinks 추가 → 비공개 테스트 12명 × 14일
 
 ---
@@ -117,7 +117,7 @@
 - 여기서 오늘 작업 종료 (사용자 선언)
 
 **다음 세션 시작점**
-- 사용자 확인: keystore 백업(리포 밖 2곳) 했는지 물어볼 것 — 아직이면 최우선
+- ~~keystore 백업~~ → **사용자 백업 완료 (2026-08-05 확인)**
 - 사용자: Play 개발자 계정 등록 ($25) → 앱 만들기 → `twa/app-release-bundle.aab` 업로드 (docs/RELEASE.md 순서)
 - 업로드 후: Play Console 앱 무결성의 **앱 서명 키 SHA-256** 을 assetlinks 에 **추가**(교체 아님) → main 머지 배포
 - 선택: `twa/app-release-signed.apk` 를 실기기에 직접 설치해 TWA 동작(주소창 없는 전체화면) 미리 확인 가능
