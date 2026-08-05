@@ -11,7 +11,7 @@
 | 항목 | 값 |
 |---|---|
 | 마지막 갱신 | 2026-08-05 |
-| 현재 단계 | **Phase 6 완료 (사용자 선언, 2026-08-05) → Phase 7 (Play Store) 준비 시작** |
+| 현재 단계 | **Phase 7 — Play 개발자 계정 심사 대기 중 (2026-08-05 등록 신청, 수일 소요 가능)** |
 | 마지막 커밋 | main `3c2987a` (PR#6 머지) = develop `dfd9e2d` |
 | CI 상태 | main·develop 전부 green |
 | 배포 URL | **https://goldrocket.vercel.app** (Vercel 프로젝트 `goldrocket`, fidget_spinner 리포 연결) |
@@ -84,11 +84,30 @@
 - [x] Bubblewrap AAB 빌드 — `twa/app-release-bundle.aab` (서명·검증 완료) + 테스트용 `app-release-signed.apk`. 빌드 절차·환경 우회 3종은 docs/RELEASE.md
 - [x] `assetlinks.json` 배치 (업로드 키 지문. **Play 등록 후 앱 서명 키 지문 추가 필요** — RELEASE.md) — main 머지 시 배포됨
 - [x] keystore 생성 + 백업 절차 문서화 (docs/RELEASE.md) — **사용자 백업 완료 확인 (2026-08-05)**
-- [ ] 개발자 계정 등록 ($25, 사용자) → AAB 업로드 → 앱 서명 키 지문 assetlinks 추가 → 비공개 테스트 12명 × 14일
+- [~] 개발자 계정 등록 ($25, 사용자) — **2026-08-05 신청 완료, 심사 대기 (수일 소요 가능)**
+- [ ] 계정 승인 후: 앱 만들기 → AAB 업로드 → 앱 서명 키 지문 assetlinks 추가 → 비공개 테스트 12명 × 14일
 
 ---
 
 ## 세션 로그
+
+### 2026-08-05 — 세션 #12 (Phase 7 — 개발자 계정 등록 신청)
+**완료**
+- 사용자: Google Play 개발자 계정 등록 신청 ($25 결제). **심사에 수일 소요 가능 — 승인 대기 상태**
+
+**다음 세션 시작점 (계정 승인 후)**
+1. Play Console에서 앱 만들기 (패키지명 `kr.goldrocket.fidgetspinner`)
+2. `twa/app-release-bundle.aab` 업로드 (docs/RELEASE.md 순서)
+3. Play Console 앱 무결성의 **앱 서명 키 SHA-256** 을 assetlinks 에 **추가**(교체 아님) → main 머지 배포
+4. 비공개 테스트 12명 × 14일
+
+**대기 중 병행 가능 (선택)**
+- `twa/app-release-signed.apk` 실기기 직접 설치 → TWA 전체화면 동작 사전 확인
+- `docs/DEVICE_CHECKLIST.md` 작성 (Phase 6 보류 항목)
+- 실기기 기록 이사 (옛 주소 → 새 주소, 백업 코드)
+
+**막힌 지점 / 결정 대기**
+- Play 계정 심사 결과 대기 (외부 요인, 수일)
 
 ### 2026-08-05 — 세션 #11 (Phase 7 시작 — TWA 도메인 확정)
 **완료**
